@@ -1,0 +1,332 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  PARENT
+  CHILD
+  ADULT
+}
+
+enum OtpPurpose {
+  REGISTER
+  LOGIN
+}
+
+enum LinkStatus {
+  PENDING
+  ACTIVE
+}
+
+enum TestAudience {
+  AGE_6
+  AGE_16
+  AGE_18
+}
+
+enum SubscriptionProvider {
+  APPLE
+  GOOGLE
+  MANUAL
+  WEB
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum AchievementThreshold {
+  FIRST_TEST_COMPLETED
+  STREAK_DAYS
+  PERFECT_TESTS_COUNT
+  CORRECT_ANSWERS_COUNT
+  DISTINCT_SECTIONS_COMPLETED
+}
+
+enum AssignmentStatus {
+  PENDING
+  SEEN
+  COMPLETED
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  role        UserRole
+  name        String
+  age         Int
+  isFemale    Boolean
+  avatarIndex Int
+  phone       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ownedLinks           ParentChildLink[] @relation("OwnerLinks")
+  joinedLinks          ParentChildLink[] @relation("CounterpartLinks")
+  refreshTokens        RefreshToken[]
+  testAttempts         TestAttempt[]
+  settings             UserSettings?
+  subscriptions        Subscription[]
+  wallet               UserWallet?
+  unlockedAchievements UserAchievement[]
+  quitProfile          QuitProfile?
+  cravingLogs          CravingLog[]
+  assignmentsSent      TestAssignment[]  @relation("AssignmentsSent")
+  assignmentsReceived  TestAssignment[]  @relation("AssignmentsReceived")
+  pushTokens           DevicePushToken[]
+}
+
+model OtpCode {
+  id         String     @id @default(uuid())
+  email      String
+  codeHash   String
+  purpose    OtpPurpose
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  @@index([email, purpose])
+}
+
+model ParentChildLink {
+  id            String     @id @default(uuid())
+  owner         User       @relation("OwnerLinks", fields: [ownerId], references: [id])
+  ownerId       String
+  counterpart   User?      @relation("CounterpartLinks", fields: [counterpartId], references: [id])
+  counterpartId String?
+  inviteCode    String     @unique
+  status        LinkStatus @default(PENDING)
+  expiresAt     DateTime
+  createdAt     DateTime   @default(now())
+  linkedAt      DateTime?
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  user      User      @relation(fields: [userId], references: [id])
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+}
+
+model Test {
+  id            String       @id @default(uuid())
+  title         String
+  description   String?
+  audience      TestAudience @default(AGE_6)
+  position      Int          @default(0)
+  sourceFile    String?
+  questionCount Int          @default(0)
+  isPublished   Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  questions   TestQuestion[]
+  attempts    TestAttempt[]
+  assignments TestAssignment[]
+
+  @@index([audience, position])
+}
+
+model ContentSection {
+  id          String       @id @default(uuid())
+  title       String
+  audience    TestAudience
+  position    Int
+  sourceFile  String
+  isPublished Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  questions     SectionQuestion[]
+  testQuestions TestQuestion[]
+
+  @@unique([audience, position])
+  @@index([audience])
+}
+
+model SectionQuestion {
+  id            String         @id @default(uuid())
+  section       ContentSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId     String
+  position      Int
+  material      String?
+  text          String
+  options       Json
+  correctOption Int
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([sectionId, position])
+}
+
+model TestQuestion {
+  id            String          @id @default(uuid())
+  test          Test            @relation(fields: [testId], references: [id], onDelete: Cascade)
+  testId        String
+  section       ContentSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  sectionId     String?
+  position      Int
+  material      String?
+  text          String
+  options       Json
+  correctOption Int
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@unique([testId, position])
+  @@index([sectionId])
+}
+
+model Guide {
+  id         String   @id @default(uuid())
+  slug       String   @unique
+  title      String
+  sourceFile String
+  pageCount  Int
+  content    Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model TestAttempt {
+  id            String    @id @default(uuid())
+  user          User      @relation(fields: [userId], references: [id])
+  userId        String
+  test          Test      @relation(fields: [testId], references: [id])
+  testId        String
+  answers       Json      @default("{}")
+  correctCount  Int       @default(0)
+  answeredCount Int       @default(0)
+  totalCount    Int
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId, testId])
+  @@index([userId, completedAt])
+}
+
+model UserSettings {
+  id                String   @id @default(uuid())
+  user              User     @relation(fields: [userId], references: [id])
+  userId            String   @unique
+  soundEnabled      Boolean  @default(true)
+  vibrationEnabled  Boolean  @default(true)
+  hintsEnabled      Boolean  @default(true)
+  notifyTests       Boolean  @default(true)
+  notifyRankChanges Boolean  @default(true)
+  dataCollection    Boolean  @default(true)
+  showActivity      Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+}
+
+model Subscription {
+  id          String               @id @default(uuid())
+  user        User                 @relation(fields: [userId], references: [id])
+  userId      String
+  provider    SubscriptionProvider
+  status      SubscriptionStatus   @default(PENDING)
+  planId      String
+  receiptData String?
+  startedAt   DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([userId, status])
+}
+
+model AchievementDefinition {
+  id             String               @id @default(uuid())
+  code           String               @unique
+  title          String
+  subtitle       String
+  thresholdType  AchievementThreshold
+  thresholdValue Int
+  position       Int                  @default(0)
+}
+
+model UserWallet {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  coins     Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model UserAchievement {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementCode String
+  unlockedAt      DateTime @default(now())
+
+  @@unique([userId, achievementCode])
+  @@index([userId])
+}
+
+model TestAssignment {
+  id           String           @id @default(uuid())
+  testId       String
+  test         Test             @relation(fields: [testId], references: [id], onDelete: Cascade)
+  assignedById String
+  assignedBy   User             @relation("AssignmentsSent", fields: [assignedById], references: [id], onDelete: Cascade)
+  assignedToId String
+  assignedTo   User             @relation("AssignmentsReceived", fields: [assignedToId], references: [id], onDelete: Cascade)
+  message      String?
+  status       AssignmentStatus @default(PENDING)
+  createdAt    DateTime         @default(now())
+  completedAt  DateTime?
+
+  @@index([assignedToId, status])
+  @@index([assignedById])
+}
+
+model QuitProfile {
+  userId            String    @id
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quitDate          DateTime?
+  cigarettesPerDay  Int       @default(10)
+  packPriceCents    Int       @default(20000)
+  cigarettesPerPack Int       @default(20)
+  updatedAt         DateTime  @updatedAt
+  createdAt         DateTime  @default(now())
+}
+
+model CravingLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  intensity Int      @default(3)
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model DevicePushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String
+  platform  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, token])
+  @@index([userId])
+}

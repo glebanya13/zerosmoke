@@ -1,0 +1,52 @@
+{
+	email admin@zerosmoker.ru
+}
+
+zerosmoker.ru, www.zerosmoker.ru {
+	encode zstd gzip
+
+	@admin_api path /api/admin/*
+	handle @admin_api {
+		basic_auth {
+			admin {$ADMIN_PASSWORD_HASH}
+		}
+		uri strip_prefix /api
+		reverse_proxy backend:3000 {
+			header_up X-Admin-Key {$ADMIN_API_KEY}
+		}
+	}
+
+	handle_path /api/* {
+		reverse_proxy backend:3000
+	}
+
+	# Admin panel lives at a path prefix (no subdomain). vinext's standalone
+	# static server does not honor Next's basePath for asset URLs, so the
+	# admin build keeps emitting root-absolute asset paths (/assets/*,
+	# /avatars/*, /favicon.svg, /og.png) — those are proxied unprefixed
+	# below. Verified no path collisions with the public site's own assets.
+	@admin_page path /staff-console-57448d550d96 /staff-console-57448d550d96/*
+	handle @admin_page {
+		basic_auth {
+			admin {$ADMIN_PASSWORD_HASH}
+		}
+		uri strip_prefix /staff-console-57448d550d96
+		reverse_proxy admin:3001
+	}
+
+	@admin_assets path /assets/* /avatars/* /favicon.svg /og.png
+	handle @admin_assets {
+		reverse_proxy admin:3001
+	}
+
+	handle {
+		reverse_proxy site:3002
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}

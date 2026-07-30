@@ -1,0 +1,144 @@
+# Production compose for ZeroSmoke on the server.
+# Service DNS names (backend/admin/site/postgres) stay stable for Caddy.
+# container_name uses zerosmoke-* branding.
+# Existing Postgres/Caddy volumes are reused so data is not wiped.
+
+name: zerosmoke
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: zerosmoke-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: smokefree
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: smokefree
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smokefree -d smokefree"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [internal]
+
+  migrate:
+    build:
+      context: ../backend
+      target: build
+    container_name: zerosmoke-migrate
+    environment: &backend-env
+      DATABASE_URL: postgresql://smokefree:${POSTGRES_PASSWORD}@postgres:5432/smokefree
+      PORT: 3000
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_REFRESH_TTL: 30d
+      REGISTRATION_TOKEN_SECRET: ${REGISTRATION_TOKEN_SECRET}
+      REGISTRATION_TOKEN_TTL: 15m
+      OTP_TTL_MINUTES: 10
+      OTP_REQUEST_COOLDOWN_SECONDS: 60
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      SUBSCRIPTION_WEB_URL: ${SUBSCRIPTION_WEB_URL:-https://zerosmoker.ru/subscribe}
+    command: ["npx", "prisma", "migrate", "deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [internal]
+    restart: "no"
+
+  content-import:
+    build:
+      context: ../backend
+      target: build
+    container_name: zerosmoke-content-import
+    environment: *backend-env
+    command:
+      ["node", "dist/scripts/import-content.js", "data/antismoke-content.json"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [internal]
+    restart: "no"
+    profiles: ["tools"]
+
+  backend:
+    build:
+      context: ../backend
+      target: runtime
+    container_name: zerosmoke-api
+    restart: unless-stopped
+    environment: *backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/admin/dashboard',{headers:{'x-admin-key':process.env.ADMIN_API_KEY}}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [internal]
+
+  admin:
+    build:
+      context: ../admin
+    container_name: zerosmoke-admin
+    restart: unless-stopped
+    networks: [internal]
+
+  site:
+    build:
+      context: ../../antismoke-site
+    container_name: zerosmoke-site
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:3000
+    networks: [internal]
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: zerosmoke-caddy
+    restart: unless-stopped
+    environment:
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+      admin:
+        condition: service_started
+      site:
+        condition: service_started
+    networks: [internal]
+
+networks:
+  internal:
+
+volumes:
+  postgres-data:
+    external: true
+    name: antismoke_postgres-data
+  caddy-data:
+    external: true
+    name: antismoke_caddy-data
+  caddy-config:
+    external: true
+    name: antismoke_caddy-config

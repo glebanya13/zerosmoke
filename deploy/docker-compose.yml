@@ -1,0 +1,57 @@
+# Server-only compose for ZeroSmoke. Do not run Postgres locally for app development —
+# point the mobile app / backend .env at the remote API and this stack on the server.
+
+name: zerosmoke
+
+services:
+  zerosmoke-postgres:
+    image: postgres:16-alpine
+    container_name: zerosmoke-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zerosmoke
+      POSTGRES_PASSWORD: zerosmoke
+      POSTGRES_DB: zerosmoke
+    volumes:
+      - zerosmoke-postgres-data:/var/lib/postgresql/data
+    networks:
+      - zerosmoke
+
+  zerosmoke-api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: zerosmoke-api
+    restart: unless-stopped
+    depends_on:
+      - zerosmoke-postgres
+    env_file:
+      - ../backend/.env
+    environment:
+      DATABASE_URL: postgresql://zerosmoke:zerosmoke@zerosmoke-postgres:5432/zerosmoke?schema=public
+    ports:
+      - '3000:3000'
+    networks:
+      - zerosmoke
+
+  zerosmoke-admin:
+    build:
+      context: ../admin
+      dockerfile: Dockerfile
+    container_name: zerosmoke-admin
+    restart: unless-stopped
+    depends_on:
+      - zerosmoke-api
+    environment:
+      PORT: '3001'
+    ports:
+      - '3001:3001'
+    networks:
+      - zerosmoke
+
+volumes:
+  zerosmoke-postgres-data:
+
+networks:
+  zerosmoke:
+    name: zerosmoke

@@ -1,0 +1,33 @@
+.DS_Store
+
+# Node
+**/node_modules/
+
+# Backend (NestJS)
+backend/dist/
+backend/generated/
+backend/.env
+
+# Admin (Next.js)
+admin/.next/
+admin/.vinext/
+admin/out/
+admin/dist/
+admin/.wrangler/
+
+# Flutter app
+app/build/
+app/.dart_tool/
+app/.flutter-plugins-dependencies
+app/.pub-cache/
+app/**/ios/Flutter/.last_build_id
+app/**/ios/Pods/
+app/**/android/app/debug/
+app/**/android/app/profile/
+app/**/android/app/release/
+
+# Local-only deploy secrets (only .env is secret; compose/Caddyfile are fine to track)
+deploy/.env
+
+# Scratch/local-only working dirs
+.tmp-site/

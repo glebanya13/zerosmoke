@@ -6,6 +6,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -30,6 +31,10 @@ export class CreateAdminQuestionDto {
   @IsInt()
   @Min(1)
   correctOption!: number;
+
+  @IsOptional()
+  @IsUUID()
+  sectionId?: string | null;
 }
 
 export class UpdateAdminQuestionDto {
@@ -55,6 +60,10 @@ export class UpdateAdminQuestionDto {
   @IsInt()
   @Min(1)
   correctOption?: number;
+
+  @IsOptional()
+  @IsUUID()
+  sectionId?: string | null;
 }
 
 export class MoveAdminQuestionDto {

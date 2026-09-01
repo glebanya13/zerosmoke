@@ -23,12 +23,12 @@ export class ContentController {
 
   @Get('tests')
   tests(@CurrentUser() user: User) {
-    return this.content.tests(user.age, user.id);
+    return this.content.tests(user);
   }
 
   @Get('tests/:id')
   test(@Param('id') id: string, @CurrentUser() user: User) {
-    return this.content.test(id, user.age);
+    return this.content.test(id, user);
   }
 
   @Get('guide')

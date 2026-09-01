@@ -25,6 +25,10 @@ class ContentTest {
     required this.description,
     required this.questionCount,
     required this.progress,
+    this.audience,
+    this.sectionId,
+    this.sectionTitle,
+    this.sectionPosition,
   });
 
   final String id;
@@ -32,16 +36,119 @@ class ContentTest {
   final String? description;
   final int questionCount;
   final TestProgress progress;
+  final String? audience;
+  final String? sectionId;
+  final String? sectionTitle;
+  final int? sectionPosition;
+
+  String get topicId => sectionId ?? id;
+  String get topicTitle =>
+      (sectionTitle != null && sectionTitle!.trim().isNotEmpty) ? sectionTitle! : title;
 
   factory ContentTest.fromJson(Map<String, dynamic> json) {
+    final section = json['section'] as Map<String, dynamic>?;
     return ContentTest(
       id: json['id'] as String,
       title: json['title'] as String,
       description: json['description'] as String?,
       questionCount: json['questionCount'] as int,
       progress: TestProgress.fromJson(json['progress'] as Map<String, dynamic>),
+      audience: json['audience'] as String?,
+      sectionId: section?['id'] as String?,
+      sectionTitle: section?['title'] as String?,
+      sectionPosition: section?['position'] as int?,
     );
   }
+}
+
+String audienceGroupLabel(String? audience) {
+  switch (audience) {
+    case 'AGE_6':
+      return '6–15 лет';
+    case 'AGE_16':
+      return '16–17 лет';
+    case 'AGE_18':
+      return '18+ лет';
+    default:
+      return 'Другой возраст';
+  }
+}
+
+class TestTopicGroup {
+  TestTopicGroup({required this.id, required this.title, required this.tests});
+
+  final String id;
+  final String title;
+  final List<ContentTest> tests;
+
+  bool get completed => tests.isNotEmpty && tests.every((t) => t.progress.completed);
+
+  ContentTest get nextTest {
+    return tests.firstWhere((t) => !t.progress.completed, orElse: () => tests.first);
+  }
+}
+
+class TestAudienceGroup {
+  TestAudienceGroup({
+    required this.audience,
+    required this.label,
+    required this.topics,
+  });
+
+  final String audience;
+  final String label;
+  final List<TestTopicGroup> topics;
+}
+
+String audienceForAge(int age) {
+  if (age < 16) return 'AGE_6';
+  if (age < 18) return 'AGE_16';
+  return 'AGE_18';
+}
+
+List<TestTopicGroup> groupTestsByTopic(List<ContentTest> tests) {
+  final order = <String>[];
+  final byTopic = <String, List<ContentTest>>{};
+  final positionByTopic = <String, int>{};
+  for (final test in tests) {
+    final id = test.topicId;
+    if (!byTopic.containsKey(id)) {
+      order.add(id);
+      byTopic[id] = [];
+      positionByTopic[id] = test.sectionPosition ?? 999999;
+    }
+    byTopic[id]!.add(test);
+  }
+  order.sort((a, b) {
+    final posCompare = (positionByTopic[a] ?? 999999).compareTo(positionByTopic[b] ?? 999999);
+    if (posCompare != 0) return posCompare;
+    return byTopic[a]!.first.topicTitle.compareTo(byTopic[b]!.first.topicTitle);
+  });
+  return [
+    for (final id in order)
+      TestTopicGroup(id: id, title: byTopic[id]!.first.topicTitle, tests: byTopic[id]!),
+  ];
+}
+
+List<TestAudienceGroup> groupTestsByAudienceAndTopic(List<ContentTest> tests) {
+  const audienceOrder = ['AGE_6', 'AGE_16', 'AGE_18'];
+  final byAudience = <String, List<ContentTest>>{};
+  for (final test in tests) {
+    final key = test.audience ?? 'UNKNOWN';
+    (byAudience[key] ??= []).add(test);
+  }
+  final keys = [
+    ...audienceOrder.where(byAudience.containsKey),
+    ...byAudience.keys.where((key) => !audienceOrder.contains(key)),
+  ];
+  return [
+    for (final key in keys)
+      TestAudienceGroup(
+        audience: key,
+        label: audienceGroupLabel(key),
+        topics: groupTestsByTopic(byAudience[key]!),
+      ),
+  ];
 }
 
 class TestQuestionModel {

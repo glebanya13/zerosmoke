@@ -42,15 +42,22 @@ export class ContentService {
     };
   }
 
-  async tests(age: number, userId: string) {
-    const audience = audienceForAge(age);
+  async tests(user: User) {
     const tests = await this.prisma.test.findMany({
-      where: { audience, isPublished: true },
-      include: { _count: { select: { questions: true } } },
-      orderBy: { position: 'asc' },
+      where:
+        user.role === 'PARENT'
+          ? { isPublished: true }
+          : { audience: audienceForAge(user.age), isPublished: true },
+      include: {
+        _count: { select: { questions: true } },
+        questions: {
+          select: { section: { select: { id: true, title: true, position: true } } },
+        },
+      },
+      orderBy: [{ audience: 'asc' }, { position: 'asc' }],
     });
     const attempts = await this.prisma.testAttempt.findMany({
-      where: { userId, testId: { in: tests.map((test) => test.id) } },
+      where: { userId: user.id, testId: { in: tests.map((test) => test.id) } },
       orderBy: { createdAt: 'desc' },
     });
     const latestByTest = new Map<string, (typeof attempts)[number]>();
@@ -59,10 +66,11 @@ export class ContentService {
         latestByTest.set(attempt.testId, attempt);
       }
     }
-    return tests.map(({ _count, ...test }) => {
+    return tests.map(({ _count, questions, ...test }) => {
       const attempt = latestByTest.get(test.id);
       return {
         ...test,
+        section: primarySection(questions),
         questionCount: _count.questions,
         progress: {
           answeredCount: attempt?.answeredCount ?? 0,
@@ -74,10 +82,12 @@ export class ContentService {
   }
 
   /** Returns test with questions but WITHOUT correctOption (anti-cheat). */
-  async test(id: string, age: number) {
-    const audience = audienceForAge(age);
+  async test(id: string, user: User) {
     const test = await this.prisma.test.findFirst({
-      where: { id, audience, isPublished: true },
+      where:
+        user.role === 'PARENT'
+          ? { id, isPublished: true }
+          : { id, audience: audienceForAge(user.age), isPublished: true },
       include: { questions: { orderBy: { position: 'asc' } } },
     });
     if (!test) throw new NotFoundException('Test not found');
@@ -208,12 +218,23 @@ export class ContentService {
     const perfectTestsCount = attempts.filter(
       (a) => a.totalCount > 0 && a.correctCount === a.totalCount,
     ).length;
+    let distinctSectionsCompleted = 0;
+    if (attempts.length) {
+      const questions = await this.prisma.testQuestion.findMany({
+        where: {
+          testId: { in: attempts.map((a) => a.testId) },
+          sectionId: { not: null },
+        },
+        select: { sectionId: true },
+      });
+      distinctSectionsCompleted = new Set(questions.map((q) => q.sectionId)).size;
+    }
     const progressByType: Record<string, number> = {
       FIRST_TEST_COMPLETED: completedTestsCount > 0 ? 1 : 0,
       STREAK_DAYS: 1,
       PERFECT_TESTS_COUNT: perfectTestsCount,
       CORRECT_ANSWERS_COUNT: totalCorrect,
-      DISTINCT_SECTIONS_COMPLETED: completedTestsCount,
+      DISTINCT_SECTIONS_COMPLETED: distinctSectionsCompleted,
     };
     for (const def of definitions) {
       const progress = progressByType[def.thresholdType] ?? 0;
@@ -250,6 +271,16 @@ export class ContentService {
       where: { id: dto.testId, isPublished: true },
     });
     if (!test) throw new NotFoundException('Test not found');
+    const child = await this.prisma.user.findUnique({
+      where: { id: dto.assignedToId },
+      select: { age: true },
+    });
+    if (!child) throw new NotFoundException('Child not found');
+    if (test.audience !== audienceForAge(child.age)) {
+      throw new BadRequestException(
+        'Тест не подходит по возрастной группе ребёнка',
+      );
+    }
 
     const created = await this.prisma.testAssignment.create({
       data: {
@@ -308,4 +339,30 @@ export class ContentService {
     });
     return rows;
   }
+}
+
+function primarySection(
+  questions: Array<{ section: { id: string; title: string; position: number } | null }>,
+): { id: string; title: string; position: number } | null {
+  const counts = new Map<string, { id: string; title: string; position: number; n: number }>();
+  for (const question of questions) {
+    const section = question.section;
+    if (!section) continue;
+    const current = counts.get(section.id);
+    if (current) {
+      current.n += 1;
+    } else {
+      counts.set(section.id, {
+        id: section.id,
+        title: section.title,
+        position: section.position,
+        n: 1,
+      });
+    }
+  }
+  let best: { id: string; title: string; position: number; n: number } | null = null;
+  for (const row of counts.values()) {
+    if (!best || row.n > best.n) best = row;
+  }
+  return best ? { id: best.id, title: best.title, position: best.position } : null;
 }

@@ -237,10 +237,90 @@ export class AdminService {
     return this.prisma.test.delete({ where: { id } });
   }
 
+  async moveTest(testId: string, direction: 'UP' | 'DOWN') {
+    const current = await this.prisma.test.findUnique({ where: { id: testId } });
+    if (!current) throw new NotFoundException('Test not found');
+    const neighbor = await this.prisma.test.findFirst({
+      where: {
+        audience: current.audience,
+        position:
+          direction === 'UP'
+            ? { lt: current.position }
+            : { gt: current.position },
+      },
+      orderBy: { position: direction === 'UP' ? 'desc' : 'asc' },
+    });
+    if (!neighbor) return current;
+    await this.prisma.$transaction([
+      this.prisma.test.update({
+        where: { id: current.id },
+        data: { position: -1 },
+      }),
+      this.prisma.test.update({
+        where: { id: neighbor.id },
+        data: { position: current.position },
+      }),
+      this.prisma.test.update({
+        where: { id: current.id },
+        data: { position: neighbor.position },
+      }),
+    ]);
+    return { moved: true };
+  }
+
+  async moveSection(sectionId: string, direction: 'UP' | 'DOWN') {
+    const current = await this.prisma.contentSection.findUnique({
+      where: { id: sectionId },
+    });
+    if (!current) throw new NotFoundException('Section not found');
+    const neighbor = await this.prisma.contentSection.findFirst({
+      where: {
+        audience: current.audience,
+        position:
+          direction === 'UP'
+            ? { lt: current.position }
+            : { gt: current.position },
+      },
+      orderBy: { position: direction === 'UP' ? 'desc' : 'asc' },
+    });
+    if (!neighbor) return current;
+    await this.prisma.$transaction([
+      this.prisma.contentSection.update({
+        where: { id: current.id },
+        data: { position: -1 },
+      }),
+      this.prisma.contentSection.update({
+        where: { id: neighbor.id },
+        data: { position: current.position },
+      }),
+      this.prisma.contentSection.update({
+        where: { id: current.id },
+        data: { position: neighbor.position },
+      }),
+    ]);
+    return { moved: true };
+  }
+
+  private async resolveQuestionSectionId(
+    testAudience: string,
+    sectionId?: string | null,
+  ): Promise<string | null | undefined> {
+    if (sectionId === undefined) return undefined;
+    if (sectionId === null) return null;
+    const section = await this.prisma.contentSection.findFirst({
+      where: { id: sectionId, audience: testAudience as never },
+    });
+    if (!section) {
+      throw new BadRequestException('Раздел не найден для этой возрастной группы');
+    }
+    return section.id;
+  }
+
   async createQuestion(testId: string, dto: CreateAdminQuestionDto) {
     this.validateQuestion(dto.options, dto.correctOption);
     const test = await this.prisma.test.findUnique({ where: { id: testId } });
     if (!test) throw new NotFoundException('Test not found');
+    const sectionId = await this.resolveQuestionSectionId(test.audience, dto.sectionId);
     const last = await this.prisma.testQuestion.aggregate({
       where: { testId },
       _max: { position: true },
@@ -250,6 +330,7 @@ export class AdminService {
         data: {
           testId,
           position: (last._max.position ?? 0) + 1,
+          sectionId: sectionId ?? null,
           material: dto.material || null,
           text: dto.text,
           options: dto.options,
@@ -273,6 +354,8 @@ export class AdminService {
       where: { id: questionId, testId },
     });
     if (!current) throw new NotFoundException('Question not found');
+    const test = await this.prisma.test.findUniqueOrThrow({ where: { id: testId } });
+    const sectionId = await this.resolveQuestionSectionId(test.audience, dto.sectionId);
     const options = (dto.options ?? current.options) as string[];
     const correctOption = dto.correctOption ?? current.correctOption;
     this.validateQuestion(options, correctOption);
@@ -280,6 +363,7 @@ export class AdminService {
       where: { id: questionId },
       data: {
         ...dto,
+        sectionId,
         material: dto.material === undefined ? undefined : dto.material || null,
       },
     });

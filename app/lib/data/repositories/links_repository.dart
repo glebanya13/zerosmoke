@@ -57,11 +57,17 @@ class LinksRepository {
     try {
       final response = await _apiClient.dio.get('/links/me');
       final data = response.data;
-      if (data == null) return null;
+      if (data is! Map<String, dynamic>) return null;
+      final linkId = data['linkId'] as String?;
+      final status = data['status'] as String?;
+      final counterpart = data['counterpart'];
+      if (linkId == null || status == null || counterpart is! Map<String, dynamic>) {
+        return null;
+      }
       return LinkInfo(
-        linkId: data['linkId'] as String,
-        status: data['status'] as String,
-        counterpart: BackendUser.fromJson(data['counterpart'] as Map<String, dynamic>),
+        linkId: linkId,
+        status: status,
+        counterpart: BackendUser.fromJson(counterpart),
       );
     } on DioException catch (e) {
       throw ApiException.fromDioError(e);

@@ -46,6 +46,22 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   FCM_SERVER_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  UNISENDER_API_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  UNISENDER_FROM_EMAIL?: string;
+
+  @IsOptional()
+  @IsString()
+  UNISENDER_FROM_NAME?: string;
+
+  @IsOptional()
+  @IsString()
+  UNISENDER_API_URL?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

@@ -13,8 +13,7 @@ import '../../data/repositories/content_repository.dart';
 import 'new_tests_sheet.dart';
 import 'start_test_sheet.dart';
 
-/// Тесты (ребёнок): категории «На прохождении» и «Мой выбор»,
-/// градиентные плитки 162×142 из фигмы.
+/// Тесты (ребёнок): начатые и каталог по темам своей возрастной группы.
 class TestsListScreen extends StatefulWidget {
   const TestsListScreen({super.key});
 
@@ -22,7 +21,8 @@ class TestsListScreen extends StatefulWidget {
   State<TestsListScreen> createState() => _TestsListScreenState();
 }
 
-class _TestsListScreenState extends State<TestsListScreen> {
+class _TestsListScreenState extends State<TestsListScreen>
+    with AutomaticKeepAliveClientMixin {
   static const _gradients = [
     AppColors.nodeBlueGradient,
     AppColors.nodeGreenGradient,
@@ -30,9 +30,16 @@ class _TestsListScreenState extends State<TestsListScreen> {
   ];
 
   bool _loading = true;
+  bool _refreshing = false;
   String? _error;
   List<ContentTest> _tests = [];
   List<TestAssignment> _assignments = [];
+  int _seenEpoch = -1;
+
+  final _inProgressScroll = ScrollController();
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -40,11 +47,23 @@ class _TestsListScreenState extends State<TestsListScreen> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  @override
+  void dispose() {
+    _inProgressScroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    } else if (_refreshing) {
+      return;
+    } else {
+      _refreshing = true;
+    }
     try {
       final content = context.read<ContentRepository>();
       final results = await Future.wait([
@@ -56,20 +75,30 @@ class _TestsListScreenState extends State<TestsListScreen> {
         _tests = results[0] as List<ContentTest>;
         _assignments = results[1] as List<TestAssignment>;
         _loading = false;
+        _refreshing = false;
+        _error = null;
+        _seenEpoch = context.read<AppState>().contentEpoch;
       });
-      // Pending assignments already surface via the mail badge; remote push
-      // is sent by the API when a parent assigns a test.
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.message;
+        if (!silent) _error = e.message;
         _loading = false;
+        _refreshing = false;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+    final epoch = context.watch<AppState>().contentEpoch;
+    if (_seenEpoch >= 0 && epoch != _seenEpoch && !_loading && !_refreshing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _load(silent: true);
+      });
+    }
+
     final topPad = MediaQuery.of(context).padding.top;
 
     if (_loading) {
@@ -87,11 +116,17 @@ class _TestsListScreenState extends State<TestsListScreen> {
       );
     }
 
-    final inProgress = _tests.where((t) => t.progress.answeredCount > 0 && !t.progress.completed).toList();
-    final myChoice = _tests.where((t) => t.progress.answeredCount == 0 || t.progress.completed).toList();
+    final inProgress =
+        _tests.where((t) => t.progress.answeredCount > 0 && !t.progress.completed).toList();
+    final available = _tests.where((t) => t.progress.answeredCount == 0).toList();
+    final completed = _tests.where((t) => t.progress.completed).toList();
+    final availableTopics = groupTestsByTopic(available);
+    final completedTopics = groupTestsByTopic(completed);
+    final ageLabel = _tests.isEmpty ? null : audienceGroupLabel(_tests.first.audience);
     final badgeCount = _assignments.where((a) => a.isIncomplete).length;
 
     return ListView(
+      key: const PageStorageKey('tests_list_vertical'),
       padding: EdgeInsets.fromLTRB(AppSpacing.md, topPad + 8, AppSpacing.md, 130),
       children: [
         SizedBox(
@@ -144,6 +179,10 @@ class _TestsListScreenState extends State<TestsListScreen> {
             ],
           ),
         ),
+        if (ageLabel != null) ...[
+          const SizedBox(height: 8),
+          Text(ageLabel, style: AppTextStyles.caption),
+        ],
         const SizedBox(height: 24),
         const Text('На прохождении', style: AppTextStyles.sectionTitle),
         const SizedBox(height: 16),
@@ -152,6 +191,8 @@ class _TestsListScreenState extends State<TestsListScreen> {
           child: inProgress.isEmpty
               ? const Center(child: Text('Пока нет начатых тестов', style: AppTextStyles.caption))
               : ListView.separated(
+                  key: const PageStorageKey('tests_in_progress'),
+                  controller: _inProgressScroll,
                   scrollDirection: Axis.horizontal,
                   itemCount: inProgress.length,
                   separatorBuilder: (_, _) => const SizedBox(width: 10),
@@ -164,19 +205,52 @@ class _TestsListScreenState extends State<TestsListScreen> {
         ),
         const SizedBox(height: 28),
         const Text('Мой выбор', style: AppTextStyles.sectionTitle),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 142,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: myChoice.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 10),
-            itemBuilder: (context, i) => _MyChoiceTile(
-              test: myChoice[i],
-              onTap: () => _openStartSheet(context, myChoice[i]),
+        if (availableTopics.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 16),
+            child: Text('Пока нет новых тестов', style: AppTextStyles.caption),
+          )
+        else
+          for (final topic in availableTopics) ...[
+            const SizedBox(height: 16),
+            Text(topic.title, style: AppTextStyles.cardTitle),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 142,
+              child: ListView.separated(
+                key: PageStorageKey('tests_topic_${topic.id}'),
+                scrollDirection: Axis.horizontal,
+                itemCount: topic.tests.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 10),
+                itemBuilder: (context, i) => _MyChoiceTile(
+                  test: topic.tests[i],
+                  onTap: () => _openStartSheet(context, topic.tests[i]),
+                ),
+              ),
             ),
-          ),
-        ),
+          ],
+        if (completedTopics.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          const Text('Пройденные', style: AppTextStyles.sectionTitle),
+          for (final topic in completedTopics) ...[
+            const SizedBox(height: 16),
+            Text(topic.title, style: AppTextStyles.cardTitle),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 142,
+              child: ListView.separated(
+                key: PageStorageKey('tests_completed_${topic.id}'),
+                scrollDirection: Axis.horizontal,
+                itemCount: topic.tests.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 10),
+                itemBuilder: (context, i) => _CompletedTile(
+                  test: topic.tests[i],
+                  onTap: () => _openStartSheet(context, topic.tests[i]),
+                ),
+              ),
+            ),
+          ],
+        ],
       ],
     );
   }
@@ -314,6 +388,45 @@ class _MyChoiceTile extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CompletedTile extends StatelessWidget {
+  const _CompletedTile({required this.test, required this.onTap});
+
+  final ContentTest test;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 162,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.screenBackground,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.borderLight),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Align(
+              alignment: Alignment.topRight,
+              child: Icon(Icons.check_circle, color: AppColors.success, size: 18),
+            ),
+            const Spacer(),
+            Text(
+              test.title,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.cardTitle.copyWith(fontSize: 14),
             ),
           ],
         ),

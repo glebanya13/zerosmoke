@@ -54,9 +54,7 @@ class _RatingScreenState extends State<RatingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final isParent = state.isParent;
-    final hasSub = state.hasSubscription;
+    final isParent = context.watch<AppState>().isParent;
 
     return Container(
       decoration: const BoxDecoration(gradient: AppColors.ratingGradient),
@@ -95,13 +93,7 @@ class _RatingScreenState extends State<RatingScreen> {
                             coins: child.coins,
                             avatarIndex: child.avatarIndex,
                             rewardsCount: child.rewardsCount,
-                            onTap: () {
-                              if (hasSub) {
-                                context.push(AppRoutes.ratingStatistics);
-                              } else {
-                                _showSubscribeSheet(context);
-                              }
-                            },
+                            onTap: () => context.push(AppRoutes.ratingStatistics),
                           ),
                         ),
                     ],
@@ -137,13 +129,7 @@ class _RatingScreenState extends State<RatingScreen> {
                         avatarIndex: entry.avatarIndex,
                         place: entry.place,
                         highlighted: entry.place == 1,
-                        onTap: () {
-                          if (hasSub) {
-                            context.push(AppRoutes.ratingStatistics);
-                          } else if (entry.place == 1) {
-                            _showSubscribeSheet(context);
-                          }
-                        },
+                        onTap: () => context.push(AppRoutes.ratingStatistics),
                       ),
                     ),
                   const SizedBox(height: AppSpacing.sm),
@@ -151,58 +137,11 @@ class _RatingScreenState extends State<RatingScreen> {
                     style: AppButtonStyle.invite,
                     expand: true,
                     label: 'Пригласить друзей',
-                    onPressed: () {},
+                    onPressed: () => context.push(AppRoutes.inviteFriend),
                   ),
                 ],
               ],
             ),
-    );
-  }
-
-  void _showSubscribeSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        margin: const EdgeInsets.all(AppSpacing.lg),
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(AppRadius.xl),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Expanded(child: Text('Подписка', style: AppTextStyles.headerTitle)),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            Text(
-              'С подпиской вам будет доступна более подробная статистика по завершенным тестам.',
-              style: AppTextStyles.bodySecondary.copyWith(
-                fontSize: 16,
-                color: AppColors.textGrey,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppButton(
-              label: 'Оформить подписку',
-              expand: true,
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.push(AppRoutes.subscription);
-              },
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -227,7 +166,7 @@ class _ChildRatingHeader extends StatelessWidget {
       child: Row(
         children: [
           AppAvatar(index: me.avatarIndex, percent: me.percent, size: 80),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -235,6 +174,8 @@ class _ChildRatingHeader extends StatelessWidget {
               children: [
                 Text(
                   me.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 20,
@@ -243,33 +184,42 @@ class _ChildRatingHeader extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                StarsRow(count: me.stars, size: 20),
+                StarsRow(count: me.stars, size: 18),
               ],
             ),
           ),
+          const SizedBox(width: 6),
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text('${me.points}/${me.total}', style: AppTextStyles.points),
-              CoinsRow(coins: me.coins),
+              CoinsRow(coins: me.coins, iconSize: 22),
             ],
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           GestureDetector(
             onTap: onTrophyTap,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.emoji_events, color: AppColors.goldStroke, size: 40),
-                Text(
-                  '${me.rewardsCount} наград',
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textHeading,
-                    fontWeight: FontWeight.w700,
+            child: SizedBox(
+              width: 56,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.emoji_events, color: AppColors.goldStroke, size: 32),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${me.rewardsCount} наград',
+                      maxLines: 1,
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textHeading,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],

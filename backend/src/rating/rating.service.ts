@@ -75,52 +75,67 @@ export class RatingService {
       this.statsForUser(user),
       this.prisma.contentSection.findMany({
         where: { audience, isPublished: true },
-        include: { _count: { select: { questions: true } } },
+        include: {
+          testQuestions: {
+            where: { test: { isPublished: true } },
+            orderBy: [{ test: { position: 'asc' } }, { position: 'asc' }],
+            select: {
+              id: true,
+              text: true,
+              correctOption: true,
+              test: { select: { id: true, title: true } },
+            },
+          },
+        },
         orderBy: { position: 'asc' },
       }),
       this.prisma.testAttempt.findMany({
         where: { userId: user.id, completedAt: { not: null } },
+        orderBy: { createdAt: 'desc' },
       }),
     ]);
     const leaderboard = await this.leaderboard(user);
     const place = leaderboard.find((row) => row.userId === user.id)?.place ?? 1;
 
-    const answeredBySection = new Map<string, number>();
-    const testIds = attempts.map((a) => a.testId);
-    if (testIds.length) {
-      const questions = await this.prisma.testQuestion.findMany({
-        where: { testId: { in: testIds }, sectionId: { not: null } },
-        select: { testId: true, sectionId: true },
-      });
-      const sectionsByTest = new Map<string, Set<string>>();
-      for (const q of questions) {
-        if (!q.sectionId) continue;
-        if (!sectionsByTest.has(q.testId)) sectionsByTest.set(q.testId, new Set());
-        sectionsByTest.get(q.testId)!.add(q.sectionId);
-      }
-      for (const attempt of attempts) {
-        const sectionIds = sectionsByTest.get(attempt.testId);
-        if (!sectionIds) continue;
-        for (const sectionId of sectionIds) {
-          answeredBySection.set(
-            sectionId,
-            (answeredBySection.get(sectionId) ?? 0) + attempt.correctCount,
-          );
-        }
+    // Latest completed attempt per test → questionId → selectedOption (0-indexed).
+    const latestAnswersByQuestion = new Map<string, number>();
+    const seenTests = new Set<string>();
+    for (const attempt of attempts) {
+      if (seenTests.has(attempt.testId)) continue;
+      seenTests.add(attempt.testId);
+      const answers = (attempt.answers as Record<string, number>) ?? {};
+      for (const [questionId, selected] of Object.entries(answers)) {
+        latestAnswersByQuestion.set(questionId, selected);
       }
     }
 
     return {
       ...stats,
       place,
-      sections: sections.map((section) => ({
-        title: section.title,
-        progress: Math.min(
-          answeredBySection.get(section.id) ?? 0,
-          section._count.questions,
-        ),
-        total: section._count.questions,
-      })),
+      sections: sections.map((section) => {
+        const questions = section.testQuestions.map((q) => {
+          const selected = latestAnswersByQuestion.get(q.id);
+          const answered = selected !== undefined;
+          const correct =
+            answered && selected + 1 === q.correctOption ? true : answered ? false : null;
+          return {
+            id: q.id,
+            text: q.text,
+            testId: q.test.id,
+            testTitle: q.test.title,
+            answered,
+            correct,
+          };
+        });
+        const progress = questions.filter((q) => q.correct === true).length;
+        return {
+          id: section.id,
+          title: section.title,
+          progress,
+          total: questions.length,
+          questions,
+        };
+      }),
     };
   }
 }

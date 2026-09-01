@@ -22,16 +22,17 @@ class RootShell extends StatefulWidget {
 }
 
 class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
-  late int _index;
-  int _refreshKey = 0;
   int _testsBadgeCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _index = widget.initialTab;
     WidgetsBinding.instance.addObserver(this);
-    _loadTestsBadge();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<AppState>().setShellTab(widget.initialTab);
+      _loadTestsBadge();
+    });
   }
 
   @override
@@ -44,17 +45,15 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
   void didUpdateWidget(RootShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialTab != widget.initialTab) {
-      setState(() {
-        _index = widget.initialTab;
-        _refreshKey++;
-      });
+      context.read<AppState>().setShellTab(widget.initialTab);
+      _loadTestsBadge();
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      setState(() => _refreshKey++);
+      context.read<AppState>().bumpContentEpoch();
       _loadTestsBadge();
     }
   }
@@ -72,34 +71,31 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
   }
 
   void _onTabTap(int index) {
-    setState(() {
-      _index = index;
-      _refreshKey++;
-    });
+    context.read<AppState>().setShellTab(index);
     if (index == 1) _loadTestsBadge();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isParent = context.watch<AppState>().isParent;
-    final refreshKey = ValueKey(_refreshKey);
+    final appState = context.watch<AppState>();
+    final isParent = appState.isParent;
+    final index = appState.shellTab.clamp(0, 3);
 
     final screens = [
-      isParent
-          ? HomeParentScreen(key: refreshKey)
-          : HomeChildScreen(key: refreshKey),
-      isParent
-          ? TipsGridScreen(key: refreshKey)
-          : TestsListScreen(key: refreshKey),
-      RatingScreen(key: refreshKey),
-      ProfileScreen(key: refreshKey),
+      isParent ? const HomeParentScreen() : const HomeChildScreen(),
+      isParent ? const TipsGridScreen() : const TestsListScreen(),
+      const RatingScreen(),
+      const ProfileScreen(),
     ];
 
     return BottomNavShell(
-      currentIndex: _index,
+      currentIndex: index,
       onTap: _onTabTap,
       testsBadgeCount: isParent ? 0 : _testsBadgeCount,
-      child: screens[_index],
+      child: IndexedStack(
+        index: index,
+        children: screens,
+      ),
     );
   }
 }

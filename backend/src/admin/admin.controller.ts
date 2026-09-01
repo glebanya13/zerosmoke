@@ -19,6 +19,7 @@ import {
   MoveAdminQuestionDto,
   UpdateAdminQuestionDto,
 } from './dto/admin-question.dto';
+import { MoveAdminEntityDto } from './dto/move-admin-entity.dto';
 
 @Controller('admin')
 @UseGuards(AdminKeyGuard)
@@ -84,6 +85,16 @@ export class AdminController {
   @Post('tests')
   createTest(@Body() dto: CreateAdminTestDto) {
     return this.admin.createTest(dto);
+  }
+
+  @Post('tests/:id/move')
+  moveTest(@Param('id') id: string, @Body() dto: MoveAdminEntityDto) {
+    return this.admin.moveTest(id, dto.direction);
+  }
+
+  @Post('sections/:id/move')
+  moveSection(@Param('id') id: string, @Body() dto: MoveAdminEntityDto) {
+    return this.admin.moveSection(id, dto.direction);
   }
 
   @Patch('tests/:id')

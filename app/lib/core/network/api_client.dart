@@ -7,7 +7,14 @@ typedef SessionExpiredCallback = void Function();
 /// transparently refreshes + retries once on a 401.
 class ApiClient {
   ApiClient(this.tokenStorage, {this.onSessionExpired})
-      : dio = Dio(BaseOptions(baseUrl: baseUrl)) {
+      : dio = Dio(
+          BaseOptions(
+            baseUrl: baseUrl,
+            connectTimeout: const Duration(seconds: 15),
+            receiveTimeout: const Duration(seconds: 20),
+            sendTimeout: const Duration(seconds: 15),
+          ),
+        ) {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {

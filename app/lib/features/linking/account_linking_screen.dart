@@ -38,6 +38,12 @@ class _AccountLinkingScreenState extends State<AccountLinkingScreen> {
   }
 
   Future<void> _loadLink() async {
+    if (mounted && !_isLoadingInitial) {
+      setState(() {
+        _isLoadingInitial = true;
+        _loadError = null;
+      });
+    }
     try {
       final link = await context.read<LinksRepository>().getMyLink();
       if (!mounted) return;
@@ -50,6 +56,12 @@ class _AccountLinkingScreenState extends State<AccountLinkingScreen> {
       if (!mounted) return;
       setState(() {
         _loadError = e.message;
+        _isLoadingInitial = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = 'Не удалось загрузить связку аккаунтов';
         _isLoadingInitial = false;
       });
     }
@@ -102,6 +114,13 @@ class _AccountLinkingScreenState extends State<AccountLinkingScreen> {
     }
   }
 
+  String _formatExpiry(DateTime expiresAt) {
+    final local = expiresAt.toLocal();
+    final hours = local.hour.toString().padLeft(2, '0');
+    final minutes = local.minute.toString().padLeft(2, '0');
+    return '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')} $hours:$minutes';
+  }
+
   @override
   Widget build(BuildContext context) {
     final isParent = context.watch<AppState>().isParent;
@@ -117,14 +136,31 @@ class _AccountLinkingScreenState extends State<AccountLinkingScreen> {
           AppSpacing.md,
         ),
         child: _isLoadingInitial
-            ? const Center(child: CircularProgressIndicator())
+            ? const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ScreenHeader(title: 'Связка аккаунтов'),
+                  Expanded(child: Center(child: CircularProgressIndicator())),
+                ],
+              )
             : _loadError != null
             ? Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(_loadError!, style: AppTextStyles.body, textAlign: TextAlign.center),
-                  const SizedBox(height: 12),
-                  AppButton(label: 'Повторить', onPressed: _loadLink),
+                  const ScreenHeader(title: 'Связка аккаунтов'),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          _loadError!,
+                          style: AppTextStyles.body,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        AppButton(label: 'Повторить', onPressed: _loadLink),
+                      ],
+                    ),
+                  ),
                 ],
               )
             : _link != null
@@ -239,6 +275,12 @@ class _AccountLinkingScreenState extends State<AccountLinkingScreen> {
                   Text(
                     'Покажите или отправьте этот код ${isParent ? 'ребёнку' : 'родителю'}',
                     style: AppTextStyles.caption,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Действует до ${_formatExpiry(_inviteCode!.expiresAt)}',
+                    style: AppTextStyles.caption.copyWith(color: AppColors.textGrey),
                     textAlign: TextAlign.center,
                   ),
                 ],

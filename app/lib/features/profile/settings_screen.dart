@@ -110,7 +110,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         40,
                       ),
                       children: [
-                        _previewOnboardingCard(),
+                        _supportCard(),
                         const SizedBox(height: 10),
                         _group('Учебный процесс', [
                           ('Звуковые эффекты', 'soundEnabled', _settings!.soundEnabled, null),
@@ -151,23 +151,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _previewOnboardingCard() {
+  Widget _supportCard() {
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: () => context.push(AppRoutes.welcome),
+        onTap: () => context.push(AppRoutes.promoOnboarding),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              Expanded(
+              Image.asset(
+                'assets/images/icons/icon_heart_support.png',
+                width: 36,
+                height: 34,
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Онбординг после регистрации',
+                    Text(
+                      'Поддержите развитие проекта',
                       style: TextStyle(
                         fontFamily: AppTextStyles.interFamily,
                         fontSize: 16,
@@ -175,10 +181,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         color: Colors.black,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text(
-                      'Показать слайды «О приложении» и «Поддержите приложение» без запросов',
-                      style: AppTextStyles.caption.copyWith(fontSize: 11),
+                      'Узнать о возможностях подписки и помочь развитию приложения',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.interFamily,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                        color: AppColors.textGrey,
+                      ),
                     ),
                   ],
                 ),

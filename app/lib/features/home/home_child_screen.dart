@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -13,9 +15,11 @@ import '../../data/models/rating_models.dart';
 import '../../data/repositories/content_repository.dart';
 import '../../data/repositories/rating_repository.dart';
 
-/// Главная (ребёнок/взрослый): карта-тропинка. Полноэкранная иллюстрация,
-/// поверх — стат-бар и градиентные карточки-узлы, координаты 1:1 с фигмой
-/// (эталонный канвас 393×852).
+/// Главная (ребёнок/взрослый): карта-тропинка.
+/// Небо и CTA зафиксированы.
+/// Продолжение — бесшовный повторяющийся фрагмент home_path_tile.png,
+/// вырезанный из исходника (см. _tileImageHeight), а не отдельный
+/// склеенный ассет — так на стыках нет шва и масштаб не плывёт.
 class HomeChildScreen extends StatefulWidget {
   const HomeChildScreen({super.key});
 
@@ -25,18 +29,60 @@ class HomeChildScreen extends StatefulWidget {
 
 class _HomeChildScreenState extends State<HomeChildScreen> {
   static const double _designWidth = 393;
-  static const double _designHeight = 852;
+  static const double _baseHeight = 852;
+  static const double _continuationTop = 720;
+  /// Бесшовный повторяющийся фрагмент тропинки: вырезан из home_path_background.png
+  /// (строки 413–650 исходника, 1024×1024, подобраны так, чтобы верх и низ
+  /// совпадали по ширине/положению тропинки и не задевали ни одного дерева) —
+  /// сам с собой стыкуется без шва. Высота переведена в те же design-координаты,
+  /// что и база (scale 852/1024), чтобы масштаб тропинки не менялся на стыке.
+  static const double _tileImageHeight = 237.0;
+  static const double _tileDesignHeight = _tileImageHeight * _baseHeight / 1024;
+  static const double _nodeStep = 175;
+  static const double _extraNodesStartTop = 720;
+  static const double _mentorBtnHeight = 56;
 
-  static const _nodeLayouts = [
-    (left: 196.0, top: 244.0, gradient: AppColors.nodeBlueGradient, icon: 'assets/images/icons/icon_security_check.png'),
-    (left: 33.0, top: 395.0, gradient: AppColors.nodeGreenGradient, icon: 'assets/images/icons/icon_brain.png'),
-    (left: 254.0, top: 485.0, gradient: AppColors.nodePurpleGradient, icon: 'assets/images/icons/icon_moon_sleep.png'),
+  static const _baseLayouts = [
+    (
+      left: 196.0,
+      top: 244.0,
+      gradient: AppColors.nodeBlueGradient,
+      icon: 'assets/images/icons/icon_security_check.png',
+    ),
+    (
+      left: 33.0,
+      top: 395.0,
+      gradient: AppColors.nodeGreenGradient,
+      icon: 'assets/images/icons/icon_brain.png',
+    ),
+    (
+      left: 254.0,
+      top: 485.0,
+      gradient: AppColors.nodePurpleGradient,
+      icon: 'assets/images/icons/icon_moon_sleep.png',
+    ),
+  ];
+
+  static const _nodeIcons = [
+    'assets/images/icons/icon_security_check.png',
+    'assets/images/icons/icon_brain.png',
+    'assets/images/icons/icon_moon_sleep.png',
+    'assets/images/icons/icon_star_broken.png',
+  ];
+
+  static const _nodeGradients = [
+    AppColors.nodeBlueGradient,
+    AppColors.nodeGreenGradient,
+    AppColors.nodePurpleGradient,
+    AppColors.nodeOrangeGradient,
   ];
 
   bool _loading = true;
   String? _error;
   RatingMe? _me;
   List<ContentTest> _tests = [];
+  int _seenEpoch = -1;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -44,11 +90,19 @@ class _HomeChildScreenState extends State<HomeChildScreen> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final results = await Future.wait([
         context.read<RatingRepository>().getMe(),
@@ -59,18 +113,24 @@ class _HomeChildScreenState extends State<HomeChildScreen> {
         _me = results[0] as RatingMe;
         _tests = results[1] as List<ContentTest>;
         _loading = false;
+        _error = null;
+        _seenEpoch = context.read<AppState>().contentEpoch;
       });
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.message;
-        _loading = false;
+        if (!silent) {
+          _error = e.message;
+          _loading = false;
+        }
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
-        _loading = false;
+        if (!silent) {
+          _error = e.toString();
+          _loading = false;
+        }
       });
     }
   }
@@ -80,14 +140,36 @@ class _HomeChildScreenState extends State<HomeChildScreen> {
     context.push(AppRoutes.testFlow, extra: TestFlowArgs(testId: test.id, paid: paid));
   }
 
-  /// First incomplete index — everything after it is locked (sequential unlock).
-  int get _firstIncompleteIndex {
-    final idx = _tests.indexWhere((t) => !t.progress.completed);
-    return idx < 0 ? _tests.length : idx;
+  void _openRecommendedTest() {
+    final topics = groupTestsByTopic(_tests);
+    if (topics.isEmpty) return;
+    final next = topics.firstWhere((topic) => !topic.completed, orElse: () => topics.first);
+    _openTest(next.nextTest);
+  }
+
+  List<({double left, double top, Gradient gradient, String icon})> _layoutsFor(int count) {
+    return List.generate(count, (i) {
+      if (i < _baseLayouts.length) return _baseLayouts[i];
+      final extraIndex = i - _baseLayouts.length;
+      final isLeft = i.isOdd;
+      return (
+        left: isLeft ? 33.0 : 220.0,
+        top: _extraNodesStartTop + extraIndex * _nodeStep,
+        gradient: _nodeGradients[i % _nodeGradients.length],
+        icon: _nodeIcons[i % _nodeIcons.length],
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final epoch = context.watch<AppState>().contentEpoch;
+    if (_seenEpoch >= 0 && epoch != _seenEpoch && !_loading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _load(silent: true);
+      });
+    }
+
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -109,113 +191,165 @@ class _HomeChildScreenState extends State<HomeChildScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final scale = constraints.maxWidth / _designWidth;
-        final incomplete = _tests.where((t) => !t.progress.completed).toList();
-        final mapNodes = (incomplete.isNotEmpty ? incomplete : _tests).take(3).toList();
-        final firstIncomplete = _firstIncompleteIndex;
+        final isTablet = constraints.maxWidth >= 600;
+        // На планшете ограничиваем ширину карты, чтобы узлы не были огромными.
+        final maxMapWidth = isTablet ? 520.0 : constraints.maxWidth;
+        final scale = maxMapWidth / _designWidth;
+        // Горизонтальный отступ для центрирования карты на iPad.
+        final hInset = (constraints.maxWidth - maxMapWidth) / 2;
 
-        return SingleChildScrollView(
-          child: Column(
-            children: [
-              SizedBox(
+        final topics = groupTestsByTopic(_tests);
+        final mapNodes = topics;
+        final layouts = _layoutsFor(mapNodes.length);
+        final firstIncomplete = mapNodes.indexWhere((topic) => !topic.completed);
+        final unlockIndex = firstIncomplete < 0 ? mapNodes.length : firstIncomplete;
+
+        final needsContinuation = mapNodes.length > _baseLayouts.length;
+        final continuationTop = _continuationTop;
+        final lastNodeBottom =
+            layouts.isEmpty ? _baseHeight : layouts.last.top + 130;
+        final totalHeight = needsContinuation
+            ? math.max(_baseHeight, lastNodeBottom + _mentorBtnHeight + 12)
+            : _baseHeight;
+        final continuationHeight = needsContinuation
+            ? math.max(0.0, totalHeight - continuationTop)
+            : 0.0;
+        final tileCount = needsContinuation
+            ? (continuationHeight / _tileDesignHeight).ceil()
+            : 0;
+
+        final mentorBottom = MediaQuery.of(context).padding.bottom + 110;
+        final topSafe = MediaQuery.of(context).padding.top;
+        final statsScale = isTablet ? 1.3 : 1.0;
+        final statsTop = topSafe + 8;
+        final dpr = MediaQuery.of(context).devicePixelRatio;
+        final pathCacheWidth = (constraints.maxWidth * dpr).round();
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/illustrations/sky_clouds_background.png',
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+                filterQuality: FilterQuality.high,
+                cacheWidth: pathCacheWidth,
+              ),
+            ),
+            SingleChildScrollView(
+              controller: _scrollController,
+              padding: EdgeInsets.only(bottom: mentorBottom + 64),
+              child: SizedBox(
                 width: constraints.maxWidth,
-                height: _designHeight * scale,
+                height: totalHeight * scale,
                 child: Stack(
+                  clipBehavior: Clip.none,
                   children: [
-                    Positioned.fill(
-                      child: Image.asset(
-                        'assets/images/illustrations/sky_clouds_background.png',
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    Positioned.fill(
-                      child: Image.asset(
-                        'assets/images/illustrations/home_path_background.png',
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    if (_me != null)
-                      Positioned(
-                        left: 16 * scale,
-                        top: 64 * scale,
-                        width: 361 * scale,
-                        child: TopStatsBar(
-                          name: _me!.name,
-                          percent: _me!.percent,
-                          stars: _me!.stars,
-                          coins: _me!.coins,
-                          points: _me!.points,
-                          pointsTotal: _me!.total,
-                          onTrophyTap: () => context.push(AppRoutes.rewards),
+                    // Фоновые изображения тропинки — на всю ширину экрана.
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: _baseHeight * scale,
+                      child: ShaderMask(
+                        blendMode: BlendMode.dstIn,
+                        shaderCallback: (bounds) {
+                          final fadeStart = (continuationTop * scale) / bounds.height;
+                          final fadeEnd = math.min(
+                            1.0,
+                            fadeStart + (56 * scale) / bounds.height,
+                          );
+                          return LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: const [
+                              Color(0xFFFFFFFF),
+                              Color(0xFFFFFFFF),
+                              Color(0x00FFFFFF),
+                            ],
+                            stops: [
+                              0.0,
+                              fadeStart.clamp(0.5, 0.95),
+                              fadeEnd.clamp(0.55, 1.0),
+                            ],
+                          ).createShader(bounds);
+                        },
+                        child: Image.asset(
+                          'assets/images/illustrations/home_path_background.png',
+                          fit: BoxFit.cover,
+                          alignment: Alignment.topCenter,
+                          filterQuality: FilterQuality.high,
+                          cacheWidth: pathCacheWidth,
                         ),
                       ),
+                    ),
+                    if (needsContinuation)
+                      for (int i = 0; i < tileCount; i++)
+                        Positioned(
+                          top: (continuationTop + i * _tileDesignHeight) * scale,
+                          left: 0,
+                          right: 0,
+                          height: _tileDesignHeight * scale,
+                          child: ClipRect(
+                            child: Image.asset(
+                              'assets/images/illustrations/home_path_tile.png',
+                              fit: BoxFit.cover,
+                              alignment: Alignment.topCenter,
+                              filterQuality: FilterQuality.high,
+                              cacheWidth: pathCacheWidth,
+                            ),
+                          ),
+                        ),
+                    // Узлы карты — центрированы с учётом hInset.
                     for (int i = 0; i < mapNodes.length; i++)
                       _node(
                         scale: scale,
-                        left: _nodeLayouts[i].left,
-                        top: _nodeLayouts[i].top,
-                        gradient: _nodeLayouts[i].gradient,
-                        iconAsset: _nodeLayouts[i].icon,
+                        left: layouts[i].left,
+                        top: layouts[i].top,
+                        hInset: hInset,
+                        gradient: layouts[i].gradient,
+                        iconAsset: layouts[i].icon,
                         label: mapNodes[i].title,
-                        locked: i > firstIncomplete,
-                        stars: mapNodes[i].progress.completed ? 3 : 0,
-                        onTap: i > firstIncomplete ? null : () => _openTest(mapNodes[i]),
+                        locked: i > unlockIndex,
+                        stars: mapNodes[i].completed ? 3 : 0,
+                        onTap: i > unlockIndex ? null : () => _openTest(mapNodes[i].nextTest),
                       ),
-                    Positioned(
-                      left: 111 * scale,
-                      top: 652 * scale,
-                      width: 176 * scale,
-                      height: 56 * scale,
-                      child: GestureDetector(
-                        onTap: () {
-                          if (_tests.isEmpty) return;
-                          final next = _tests.firstWhere(
-                            (t) => !t.progress.completed,
-                            orElse: () => _tests.first,
-                          );
-                          _openTest(next);
-                        },
-                        child: Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 12 * scale,
-                            vertical: 10 * scale,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: AppColors.nodeOrangeGradient,
-                            borderRadius: BorderRadius.circular(30 * scale),
-                            border: Border.all(color: Colors.white, width: 3 * scale),
-                          ),
-                          child: Row(
-                            children: [
-                              Image.asset(
-                                'assets/images/icons/icon_star_broken.png',
-                                width: 32 * scale,
-                                height: 32 * scale,
-                                color: Colors.white,
-                              ),
-                              SizedBox(width: 8 * scale),
-                              Expanded(
-                                child: Text(
-                                  'Рекомендация от наставника',
-                                  style: TextStyle(
-                                    fontFamily: AppTextStyles.interFamily,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13 * scale,
-                                    height: 16 / 13,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+            // Верхний рейтинг закреплён: всегда кликабелен, учитывает safe area.
+            if (_me != null)
+              Positioned(
+                left: 16,
+                right: 16,
+                top: statsTop,
+                child: TopStatsBar(
+                  name: _me!.name,
+                  percent: _me!.percent,
+                  stars: _me!.stars,
+                  coins: _me!.coins,
+                  points: _me!.points,
+                  pointsTotal: _me!.total,
+                  rank: _me!.place,
+                  avatarIndex: _me!.avatarIndex,
+                  scale: statsScale,
+                  onRatingTap: () => context.go('${AppRoutes.root}?tab=2'),
+                  onTrophyTap: () => context.push(AppRoutes.rewards),
+                ),
+              ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: mentorBottom,
+              child: Center(
+                child: _MentorRecommendationButton(
+                  scale: scale,
+                  onTap: _openRecommendedTest,
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -225,6 +359,7 @@ class _HomeChildScreenState extends State<HomeChildScreen> {
     required double scale,
     required double left,
     required double top,
+    required double hInset,
     required Gradient gradient,
     required String iconAsset,
     required String label,
@@ -233,7 +368,7 @@ class _HomeChildScreenState extends State<HomeChildScreen> {
     VoidCallback? onTap,
   }) {
     return Positioned(
-      left: left * scale,
+      left: left * scale + hInset,
       top: top * scale,
       width: 100 * scale,
       child: GestureDetector(
@@ -304,6 +439,63 @@ class _HomeChildScreenState extends State<HomeChildScreen> {
                 }),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MentorRecommendationButton extends StatelessWidget {
+  const _MentorRecommendationButton({required this.scale, required this.onTap});
+
+  final double scale;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      elevation: 6,
+      shadowColor: const Color(0x44000000),
+      borderRadius: BorderRadius.circular(30 * scale),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(30 * scale),
+        child: Ink(
+          width: 176 * scale,
+          height: 56 * scale,
+          padding: EdgeInsets.symmetric(
+            horizontal: 12 * scale,
+            vertical: 10 * scale,
+          ),
+          decoration: BoxDecoration(
+            gradient: AppColors.nodeOrangeGradient,
+            borderRadius: BorderRadius.circular(30 * scale),
+            border: Border.all(color: Colors.white, width: 3 * scale),
+          ),
+          child: Row(
+            children: [
+              Image.asset(
+                'assets/images/icons/icon_star_broken.png',
+                width: 32 * scale,
+                height: 32 * scale,
+                color: Colors.white,
+              ),
+              SizedBox(width: 8 * scale),
+              Expanded(
+                child: Text(
+                  'Рекомендация от наставника',
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.interFamily,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13 * scale,
+                    height: 16 / 13,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

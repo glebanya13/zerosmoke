@@ -6,6 +6,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { LinksModule } from './links/links.module';
+import { ReferralsModule } from './referrals/referrals.module';
 import { validate } from './config/env.validation';
 import { AdminModule } from './admin/admin.module';
 import { ContentModule } from './content/content.module';
@@ -24,6 +25,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     AuthModule,
     UsersModule,
     LinksModule,
+    ReferralsModule,
     AdminModule,
     ContentModule,
     RatingModule,

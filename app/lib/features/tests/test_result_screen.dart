@@ -1,17 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../core/design_system/app_colors.dart';
 import '../../core/design_system/app_dimens.dart';
 import '../../core/design_system/app_text_styles.dart';
 import '../../core/router/app_router.dart';
 import '../../core/router/route_args.dart';
 import '../../core/widgets/app_button.dart';
+import '../../data/app_state.dart';
 
 /// «Тест пройден!» — экран результата с реальным счётом попытки.
 class TestResultScreen extends StatelessWidget {
   const TestResultScreen({super.key, required this.args});
 
   final TestResultArgs args;
+
+  void _leaveToShell(BuildContext context, {required int tab}) {
+    context.read<AppState>().bumpContentEpoch();
+    context.read<AppState>().setShellTab(tab);
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoutes.root);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +40,7 @@ class TestResultScreen extends StatelessWidget {
               Row(
                 children: [
                   GestureDetector(
-                    onTap: () => context.pop(),
+                    onTap: () => _leaveToShell(context, tab: context.read<AppState>().shellTab),
                     child: Row(
                       children: const [
                         Icon(Icons.chevron_left, size: 24, color: AppColors.textPrimary),
@@ -212,7 +224,7 @@ class TestResultScreen extends StatelessWidget {
                       style: AppButtonStyle.white,
                       expand: true,
                       label: 'На главную',
-                      onPressed: () => context.go(AppRoutes.root),
+                      onPressed: () => _leaveToShell(context, tab: 0),
                     ),
                   ),
                   const SizedBox(width: 9),
@@ -220,7 +232,7 @@ class TestResultScreen extends StatelessWidget {
                     child: AppButton(
                       expand: true,
                       label: 'К тестам',
-                      onPressed: () => context.go('${AppRoutes.root}?tab=1'),
+                      onPressed: () => _leaveToShell(context, tab: 1),
                     ),
                   ),
                 ],

@@ -40,6 +40,7 @@ describe('Devices + subscription checkout (e2e)', () => {
         age: 12,
         isFemale: false,
         avatarIndex: 0,
+        referralCode: `E2E${Date.now()}`,
       },
     });
     userId = user.id;

@@ -11,6 +11,7 @@ class CodeInputBoxes extends StatefulWidget {
     this.boxSize = 60,
     this.radius = 20,
     this.gap = 10,
+    this.alwaysActiveBorder = false,
   });
 
   final int length;
@@ -18,6 +19,10 @@ class CodeInputBoxes extends StatefulWidget {
   final double boxSize;
   final double radius;
   final double gap;
+
+  /// When true, every box shows the filled (blue) border from the start
+  /// instead of only once it has a character in it.
+  final bool alwaysActiveBorder;
 
   @override
   State<CodeInputBoxes> createState() => _CodeInputBoxesState();
@@ -62,6 +67,7 @@ class _CodeInputBoxesState extends State<CodeInputBoxes> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(widget.length, (index) {
         final filled = _controllers[index].text.isNotEmpty;
+        final active = filled || widget.alwaysActiveBorder;
         return Padding(
           padding: EdgeInsets.symmetric(horizontal: widget.gap / 2),
           child: SizedBox(
@@ -72,6 +78,10 @@ class _CodeInputBoxesState extends State<CodeInputBoxes> {
               focusNode: _nodes[index],
               textAlign: TextAlign.center,
               maxLength: 1,
+              autocorrect: false,
+              enableSuggestions: false,
+              enableInteractiveSelection: false,
+              textCapitalization: TextCapitalization.characters,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
               decoration: InputDecoration(
                 counterText: '',
@@ -80,14 +90,22 @@ class _CodeInputBoxesState extends State<CodeInputBoxes> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(widget.radius),
                   borderSide: BorderSide(
-                    color: filled ? AppColors.primary : AppColors.border,
+                    color: active ? AppColors.primary : AppColors.border,
                   ),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(widget.radius),
                   borderSide: BorderSide(
-                    color: filled ? AppColors.primary : AppColors.border,
+                    color: active ? AppColors.primary : AppColors.border,
                   ),
+                ),
+                // Without an explicit focusedBorder, Flutter falls back to
+                // the ambient InputDecorationTheme (a pill-shaped border
+                // elsewhere in the app), which made a focused box balloon
+                // into an oval instead of staying a rounded square.
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(widget.radius),
+                  borderSide: const BorderSide(color: AppColors.primary, width: 2),
                 ),
               ),
               onChanged: (value) => _onChanged(index, value),

@@ -62,16 +62,17 @@ enum AssignmentStatus {
 }
 
 model User {
-  id          String   @id @default(uuid())
-  email       String   @unique
-  role        UserRole
-  name        String
-  age         Int
-  isFemale    Boolean
-  avatarIndex Int
-  phone       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  email        String   @unique
+  role         UserRole
+  name         String
+  age          Int
+  isFemale     Boolean
+  avatarIndex  Int
+  phone        String?
+  referralCode String   @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   ownedLinks           ParentChildLink[] @relation("OwnerLinks")
   joinedLinks          ParentChildLink[] @relation("CounterpartLinks")
@@ -86,6 +87,22 @@ model User {
   assignmentsSent      TestAssignment[]  @relation("AssignmentsSent")
   assignmentsReceived  TestAssignment[]  @relation("AssignmentsReceived")
   pushTokens           DevicePushToken[]
+  referralsMade        Referral[]        @relation("ReferrerReferrals")
+  referredBy           Referral?         @relation("RefereeReferral")
+}
+
+/// One-time record of a friend-invite redemption: refereeId is unique because
+/// each user can only apply one friend's referral code, ever.
+model Referral {
+  id          String   @id @default(uuid())
+  referrer    User     @relation("ReferrerReferrals", fields: [referrerId], references: [id])
+  referrerId  String
+  referee     User     @relation("RefereeReferral", fields: [refereeId], references: [id])
+  refereeId   String   @unique
+  rewardCoins Int
+  createdAt   DateTime @default(now())
+
+  @@index([referrerId])
 }
 
 model OtpCode {

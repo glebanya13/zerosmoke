@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -24,9 +26,43 @@ class RegisterCodeScreen extends StatefulWidget {
 }
 
 class _RegisterCodeScreenState extends State<RegisterCodeScreen> {
+  static const _resendCooldownSeconds = 60;
+
   String? _lastCode;
   bool _isLoading = false;
+  bool _isResending = false;
   String? _errorMessage;
+  int _resendSecondsLeft = 0;
+  Timer? _resendTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startResendCooldown();
+  }
+
+  @override
+  void dispose() {
+    _resendTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startResendCooldown() {
+    _resendTimer?.cancel();
+    setState(() => _resendSecondsLeft = _resendCooldownSeconds);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_resendSecondsLeft <= 1) {
+        timer.cancel();
+        setState(() => _resendSecondsLeft = 0);
+        return;
+      }
+      setState(() => _resendSecondsLeft -= 1);
+    });
+  }
 
   Future<void> _verify(String code) async {
     setState(() {
@@ -69,8 +105,34 @@ class _RegisterCodeScreenState extends State<RegisterCodeScreen> {
     }
   }
 
+  Future<void> _resendCode() async {
+    if (_resendSecondsLeft > 0 || _isResending) return;
+    setState(() {
+      _isResending = true;
+      _errorMessage = null;
+    });
+    try {
+      await context.read<AuthRepository>().requestOtp(widget.args.email, widget.args.purpose);
+      if (!mounted) return;
+      _startResendCooldown();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Новый код отправлен на e-mail')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMessage = e.message);
+    } finally {
+      if (mounted) setState(() => _isResending = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final title = widget.args.purpose == OtpPurpose.login ? 'Вход' : 'Регистрация';
+    final hint = widget.args.purpose == OtpPurpose.login
+        ? 'Введите код для входа'
+        : 'Введите код для подтверждения регистрации';
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -79,9 +141,9 @@ class _RegisterCodeScreenState extends State<RegisterCodeScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 252),
-              const Text(
-                'Регистрация',
-                style: TextStyle(
+              Text(
+                title,
+                style: const TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
                   fontWeight: FontWeight.w600,
                   fontSize: 20,
@@ -92,11 +154,23 @@ class _RegisterCodeScreenState extends State<RegisterCodeScreen> {
               CodeInputBoxes(length: 4, onCompleted: _isLoading ? null : _verify),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                _errorMessage ?? 'Введите код для подтверждения регистрации',
+                _errorMessage ?? hint,
                 textAlign: TextAlign.center,
                 style: _errorMessage != null
                     ? AppTextStyles.bodySecondary.copyWith(color: Colors.red)
                     : AppTextStyles.bodySecondary,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextButton(
+                onPressed: (_resendSecondsLeft > 0 || _isResending) ? null : _resendCode,
+                child: Text(
+                  _isResending
+                      ? 'Отправка...'
+                      : _resendSecondsLeft > 0
+                          ? 'Отправить снова через $_resendSecondsLeft с'
+                          : 'Отправить код снова',
+                  style: AppTextStyles.link,
+                ),
               ),
               const Spacer(),
               AppButton(

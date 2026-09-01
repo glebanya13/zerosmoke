@@ -44,6 +44,7 @@ describe('Content + attempt lifecycle (e2e)', () => {
         age: 10,
         isFemale: false,
         avatarIndex: 0,
+        referralCode: `E2E${Date.now()}`,
       },
     });
     userId = user.id;
@@ -156,6 +157,58 @@ describe('Content + attempt lifecycle (e2e)', () => {
     expect(ids).toContain(publishedTestId);
     expect(ids).not.toContain(unpublishedTestId);
     expect(ids).not.toContain(otherAudienceTestId);
+  });
+
+  it('attaches the topic section to listed tests', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/content/tests')
+      .set(auth())
+      .expect(200);
+
+    const row = (
+      res.body as Array<{ id: string; section: { id: string } | null }>
+    ).find((test) => test.id === publishedTestId);
+    expect(row?.section?.id).toBe(sectionId);
+  });
+
+  it('lets a parent list every age group and open a child test', async () => {
+    const parent = await prisma.user.create({
+      data: {
+        email: `content-parent-e2e-${Date.now()}@example.com`,
+        role: 'PARENT',
+        name: 'E2E Parent',
+        age: 40,
+        isFemale: false,
+        avatarIndex: 0,
+        referralCode: `E2EP${Date.now()}`,
+      },
+    });
+    const parentToken = jwt.sign(
+      { sub: parent.id, email: parent.email, role: parent.role },
+      {
+        secret: config.getOrThrow<string>('JWT_ACCESS_SECRET'),
+        expiresIn: '1h',
+      },
+    );
+    const parentAuth = { Authorization: `Bearer ${parentToken}` };
+
+    try {
+      const res = await request(app.getHttpServer())
+        .get('/content/tests')
+        .set(parentAuth)
+        .expect(200);
+      const ids = (res.body as Array<{ id: string }>).map((t) => t.id);
+      expect(ids).toContain(publishedTestId);
+      expect(ids).toContain(otherAudienceTestId);
+      expect(ids).not.toContain(unpublishedTestId);
+
+      await request(app.getHttpServer())
+        .get(`/content/tests/${publishedTestId}`)
+        .set(parentAuth)
+        .expect(200);
+    } finally {
+      await prisma.user.delete({ where: { id: parent.id } });
+    }
   });
 
   it('lists only published sections for the user audience', async () => {

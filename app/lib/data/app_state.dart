@@ -47,6 +47,24 @@ class AppState extends ChangeNotifier {
   bool get isParent => role == UserRole.parent;
   bool get isAdult => role == UserRole.adult;
 
+  /// Active bottom-nav tab inside [RootShell]. Survives test-flow pop.
+  int shellTab = 0;
+
+  /// Bumped when content (tests/progress) changes and tabs should soft-reload.
+  int contentEpoch = 0;
+
+  void setShellTab(int tab) {
+    final next = tab.clamp(0, 3);
+    if (shellTab == next) return;
+    shellTab = next;
+    notifyListeners();
+  }
+
+  void bumpContentEpoch() {
+    contentEpoch++;
+    notifyListeners();
+  }
+
   void setPendingCodeVerify(CodeVerifyArgs args) {
     pendingCodeVerify = args;
   }
@@ -134,6 +152,8 @@ class AppState extends ChangeNotifier {
     clearRegistrationFlow();
     isAuthenticated = false;
     hasSubscription = false;
+    shellTab = 0;
+    contentEpoch = 0;
     soundEnabled = true;
     vibrationEnabled = true;
     hintsEnabled = true;
@@ -157,6 +177,8 @@ class AppState extends ChangeNotifier {
     clearRegistrationFlow();
     isAuthenticated = false;
     hasSubscription = false;
+    shellTab = 0;
+    contentEpoch = 0;
     soundEnabled = true;
     vibrationEnabled = true;
     hintsEnabled = true;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/design_system/app_colors.dart';
 import '../../core/design_system/app_dimens.dart';
 import '../../core/design_system/app_text_styles.dart';
@@ -20,12 +21,42 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  static const _subscriptionPromoSeenKey = 'subscription_promo_seen_ymd';
+
   LinkInfo? _link;
+  /// Подсветка «Подписка»: раз в день, пока нет оплаты и сегодня ещё не заходили.
+  bool _showSubscriptionPromo = false;
 
   @override
   void initState() {
     super.initState();
     _loadLink();
+    _loadSubscriptionPromo();
+  }
+
+  String _todayYmd() {
+    final now = DateTime.now();
+    final m = now.month.toString().padLeft(2, '0');
+    final d = now.day.toString().padLeft(2, '0');
+    return '${now.year}-$m-$d';
+  }
+
+  Future<void> _loadSubscriptionPromo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final seen = prefs.getString(_subscriptionPromoSeenKey);
+    final hasSub = context.read<AppState>().hasSubscription;
+    if (!mounted) return;
+    setState(() {
+      _showSubscriptionPromo = !hasSub && seen != _todayYmd();
+    });
+  }
+
+  Future<void> _openSubscription() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_subscriptionPromoSeenKey, _todayYmd());
+    if (!mounted) return;
+    setState(() => _showSubscriptionPromo = false);
+    context.push(AppRoutes.subscription);
   }
 
   Future<void> _loadLink() async {
@@ -49,6 +80,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final user = state.isParent ? state.parentUser : state.childUser;
+    final highlightSubscription =
+        !state.hasSubscription && _showSubscriptionPromo;
 
     final topPad = MediaQuery.of(context).padding.top;
     return Scaffold(
@@ -153,9 +186,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 10),
                 _MenuPill(
                   label: 'Подписка',
-                  gradientBorder: true,
-                  showBadge: true,
-                  onTap: () => context.push(AppRoutes.subscription),
+                  gradientBorder: highlightSubscription,
+                  showBadge: highlightSubscription,
+                  onTap: _openSubscription,
                 ),
                 const SizedBox(height: 10),
                 _MenuPill(
@@ -193,8 +226,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-/// Пункт меню профиля из фигмы: пилюля 60px r=20 с центрированным текстом
-/// SF Regular 20; у «Подписки» — градиентная рамка и красный бейдж.
+/// Пункт меню профиля из фигмы: пилюля 60px r=20 с центрированным текстом.
+/// У «Подписки» без оплаты — градиентная рамка и красный бейдж (раз в день).
 class _MenuPill extends StatelessWidget {
   const _MenuPill({
     required this.label,

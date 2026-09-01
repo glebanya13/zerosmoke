@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { createHash } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import type { MailService } from '../mail/mail.service';
 import { MAIL_SERVICE } from '../mail/mail.service';
@@ -21,6 +21,8 @@ import { CompleteRegistrationDto } from './dto/complete-registration.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { parseDurationMs } from './duration.util';
 import type { StringValue } from 'ms';
+import { ReferralsService } from '../referrals/referrals.service';
+import { normalizeEmail } from './auth.util';
 
 interface RegistrationTokenPayload {
   email: string;
@@ -38,6 +40,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
     @Inject(MAIL_SERVICE) private readonly mailService: MailService,
+    private readonly referralsService: ReferralsService,
   ) {}
 
   private hashSecret(value: string): string {
@@ -45,43 +48,63 @@ export class AuthService {
   }
 
   private generateOtpCode(): string {
-    // TODO: revert to random once Unisender Go is wired up
-    return '1234';
+    return String(randomInt(0, 10_000)).padStart(4, '0');
   }
 
   async requestOtp(dto: RequestOtpDto): Promise<{ message: string }> {
-    const existingUser = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const email = normalizeEmail(dto.email);
+    const existingUser = await this.prisma.user.findUnique({ where: { email } });
 
     if (dto.purpose === OtpPurpose.REGISTER && existingUser) {
-      throw new ConflictException('An account with this email already exists');
+      throw new ConflictException(
+        'Аккаунт с этим e-mail уже есть. Войдите или используйте другой адрес.',
+      );
     }
     if (dto.purpose === OtpPurpose.LOGIN && !existingUser) {
-      throw new NotFoundException('No account found for this email');
+      throw new NotFoundException(
+        'Аккаунт с этим e-mail не найден. Сначала создайте аккаунт.',
+      );
     }
 
     const cooldownSeconds = this.config.getOrThrow<number>('OTP_REQUEST_COOLDOWN_SECONDS');
     const lastOtp = await this.prisma.otpCode.findFirst({
-      where: { email: dto.email, purpose: dto.purpose },
+      where: { email, purpose: dto.purpose },
       orderBy: { createdAt: 'desc' },
     });
     if (lastOtp && Date.now() - lastOtp.createdAt.getTime() < cooldownSeconds * 1000) {
-      throw new HttpException('Please wait before requesting another code', HttpStatus.TOO_MANY_REQUESTS);
+      const stillValid =
+        lastOtp.consumedAt === null && lastOtp.expiresAt.getTime() > Date.now();
+      if (stillValid) {
+        throw new HttpException(
+          `Подождите ${cooldownSeconds} сек. перед повторной отправкой кода.`,
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
     }
 
     const code = this.generateOtpCode();
     const ttlMinutes = this.config.getOrThrow<number>('OTP_TTL_MINUTES');
+    await this.prisma.otpCode.updateMany({
+      where: { email, purpose: dto.purpose, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
     await this.prisma.otpCode.create({
       data: {
-        email: dto.email,
+        email,
         purpose: dto.purpose,
         codeHash: this.hashSecret(code),
         expiresAt: new Date(Date.now() + ttlMinutes * 60_000),
       },
     });
 
-    await this.mailService.sendOtpCode(dto.email, code);
+    await this.mailService.sendOtpCode(email, code).catch(() => {
+      throw new HttpException(
+        'Не удалось отправить код на e-mail. Попробуйте позже.',
+        HttpStatus.BAD_GATEWAY,
+      );
+    });
 
-    return { message: 'Verification code sent' };
+    return { message: 'Код отправлен на e-mail' };
   }
 
   async verifyOtp(
@@ -90,9 +113,12 @@ export class AuthService {
     | { purpose: 'REGISTER'; registrationToken: string }
     | { purpose: 'LOGIN'; accessToken: string; refreshToken: string; user: User }
   > {
+    const email = normalizeEmail(dto.email);
+    const code = dto.code.trim();
+
     const otp = await this.prisma.otpCode.findFirst({
       where: {
-        email: dto.email,
+        email,
         purpose: dto.purpose,
         consumedAt: null,
         expiresAt: { gt: new Date() },
@@ -100,8 +126,14 @@ export class AuthService {
       orderBy: { createdAt: 'desc' },
     });
 
-    if (!otp || otp.codeHash !== this.hashSecret(dto.code)) {
-      throw new UnauthorizedException('Invalid or expired code');
+    if (!otp) {
+      throw new UnauthorizedException(
+        'Код истёк или уже использован. Вернитесь назад и запросите новый код.',
+      );
+    }
+
+    if (otp.codeHash !== this.hashSecret(code)) {
+      throw new UnauthorizedException('Неверный код. Проверьте и попробуйте снова.');
     }
 
     await this.prisma.otpCode.update({
@@ -110,7 +142,7 @@ export class AuthService {
     });
 
     if (dto.purpose === OtpPurpose.REGISTER) {
-      const payload: RegistrationTokenPayload = { email: dto.email };
+      const payload: RegistrationTokenPayload = { email };
       const registrationToken = this.jwtService.sign(payload, {
         secret: this.config.getOrThrow<string>('REGISTRATION_TOKEN_SECRET'),
         expiresIn: this.config.getOrThrow<StringValue>('REGISTRATION_TOKEN_TTL'),
@@ -118,9 +150,11 @@ export class AuthService {
       return { purpose: 'REGISTER', registrationToken };
     }
 
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
-      throw new NotFoundException('No account found for this email');
+      throw new NotFoundException(
+        'Аккаунт с этим e-mail не найден. Сначала создайте аккаунт.',
+      );
     }
     const tokens = await this.issueTokens(user);
     return { purpose: 'LOGIN', user, ...tokens };
@@ -135,23 +169,30 @@ export class AuthService {
         secret: this.config.getOrThrow<string>('REGISTRATION_TOKEN_SECRET'),
       });
     } catch {
-      throw new UnauthorizedException('Invalid or expired registration token');
+      throw new UnauthorizedException(
+        'Сессия регистрации истекла. Начните регистрацию заново.',
+      );
     }
 
-    const existingUser = await this.prisma.user.findUnique({ where: { email: payload.email } });
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: normalizeEmail(payload.email) },
+    });
     if (existingUser) {
-      throw new ConflictException('An account with this email already exists');
+      throw new ConflictException(
+        'Аккаунт с этим e-mail уже есть. Войдите или используйте другой адрес.',
+      );
     }
 
     const user = await this.prisma.user.create({
       data: {
-        email: payload.email,
+        email: normalizeEmail(payload.email),
         role: dto.role,
         name: dto.name,
         age: dto.age,
         isFemale: dto.isFemale,
         avatarIndex: dto.avatarIndex,
         phone: dto.phone,
+        referralCode: await this.uniqueReferralCode(),
       },
     });
 
@@ -246,5 +287,14 @@ export class AuthService {
     });
 
     return { accessToken, refreshToken };
+  }
+
+  private async uniqueReferralCode(): Promise<string> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = this.referralsService.generateReferralCode();
+      const existing = await this.prisma.user.findUnique({ where: { referralCode: code } });
+      if (!existing) return code;
+    }
+    throw new Error('Could not generate a unique referral code');
   }
 }

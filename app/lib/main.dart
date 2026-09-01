@@ -9,6 +9,7 @@ import 'core/router/app_router.dart';
 import 'data/app_state.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/links_repository.dart';
+import 'data/repositories/referrals_repository.dart';
 import 'data/repositories/users_repository.dart';
 import 'data/repositories/content_repository.dart';
 import 'data/repositories/rating_repository.dart';
@@ -74,6 +75,7 @@ class _AntismokeAppState extends State<AntismokeApp> {
         Provider(create: (_) => AuthRepository(widget.apiClient, widget.tokenStorage)),
         Provider(create: (_) => UsersRepository(widget.apiClient)),
         Provider(create: (_) => LinksRepository(widget.apiClient)),
+        Provider(create: (_) => ReferralsRepository(widget.apiClient)),
         Provider(create: (_) => ContentRepository(widget.apiClient)),
         Provider(create: (_) => RatingRepository(widget.apiClient)),
         Provider(create: (_) => AchievementsRepository(widget.apiClient)),

@@ -1,5 +1,5 @@
-# Server-only compose for ZeroSmoke. Do not run Postgres locally for app development —
-# point the mobile app / backend .env at the remote API and this stack on the server.
+# Local/dev compose — for quick stack on a dev machine.
+# Production uses deploy/compose.yml instead.
 
 name: zerosmoke
 

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 import '../../core/design_system/app_colors.dart';
 import '../../core/design_system/app_dimens.dart';
 import '../../core/design_system/app_text_styles.dart';
@@ -8,7 +7,6 @@ import '../../core/router/app_router.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/back_icon_button.dart';
 import '../../core/widgets/step_dots.dart';
-import '../../data/app_state.dart';
 import 'subscription_paywall_modal.dart';
 
 class _PromoFeature {
@@ -101,8 +99,16 @@ class _PromoOnboardingScreenState extends State<PromoOnboardingScreen> {
   int _detailIndex = 0;
 
   void _finish() {
-    final isParent = context.read<AppState>().isParent;
-    context.go(isParent ? AppRoutes.accountLinking : AppRoutes.root);
+    if (_showDetails || _showSubscription) {
+      setState(() {
+        _showDetails = false;
+        _showSubscription = false;
+      });
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.go(AppRoutes.root);
+    });
   }
 
   void _openDetails() {

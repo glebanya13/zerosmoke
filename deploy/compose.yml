@@ -41,6 +41,10 @@ services:
       OTP_REQUEST_COOLDOWN_SECONDS: 60
       ADMIN_API_KEY: ${ADMIN_API_KEY}
       SUBSCRIPTION_WEB_URL: ${SUBSCRIPTION_WEB_URL:-https://zerosmoker.ru/subscribe}
+      UNISENDER_API_KEY: ${UNISENDER_API_KEY:-}
+      UNISENDER_FROM_EMAIL: ${UNISENDER_FROM_EMAIL:-}
+      UNISENDER_FROM_NAME: ${UNISENDER_FROM_NAME:-ZeroSmoke}
+      UNISENDER_API_URL: ${UNISENDER_API_URL:-https://goapi.unisender.ru/ru/transactional/api/v1/email/send.json}
     command: ["npx", "prisma", "migrate", "deploy"]
     depends_on:
       postgres:

@@ -9,12 +9,15 @@ import '../../core/router/app_router.dart';
 import '../../core/router/route_args.dart';
 import '../../core/widgets/app_avatar.dart';
 import '../../data/app_state.dart';
+import '../../data/models/backend_user.dart';
 import '../../data/models/content_models.dart';
 import '../../data/models/rating_models.dart';
 import '../../data/repositories/content_repository.dart';
+import '../../data/repositories/links_repository.dart';
 import '../../data/repositories/rating_repository.dart';
 import '../tips/tip_colors.dart';
 import 'send_test_sheet.dart';
+import 'view_test_sheet.dart';
 
 /// Главная (Родитель): градиентный фон, карусель прогресса детей,
 /// новые тесты, рекомендации и советы — 1:1 с фигмой.
@@ -51,12 +54,19 @@ class _HomeParentScreenState extends State<HomeParentScreen> {
         content.getGuide(),
         content.getTests(),
         content.getAssignments(),
+        context.read<LinksRepository>().getChildren(),
       ]);
       if (!mounted) return;
+      final children = results[4] as List<BackendUser>;
+      final allowedAudiences =
+          children.map((child) => audienceForAge(child.age)).toSet();
+      final allTests = results[2] as List<ContentTest>;
       setState(() {
         _children = results[0] as List<LeaderboardEntry>;
         _tips = (results[1] as GuideModel).sections;
-        _tests = results[2] as List<ContentTest>;
+        _tests = children.isEmpty
+            ? <ContentTest>[]
+            : allTests.where((test) => allowedAudiences.contains(test.audience)).toList();
         _assignments = results[3] as List<TestAssignment>;
         _loading = false;
       });
@@ -84,11 +94,28 @@ class _HomeParentScreenState extends State<HomeParentScreen> {
     );
   }
 
+  void _openViewSheet(ContentTest test) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ViewTestSheet(
+        test: test,
+        onSend: () => _openSendSheet(test),
+      ),
+    );
+  }
+
+  void _openAccountLinking() {
+    context.push(AppRoutes.accountLinking).then((_) {
+      if (mounted) _load();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
     final parent = context.watch<AppState>().parentUser;
-    final newTests = _tests.take(2).toList();
     final incomplete = _assignments.where((a) => a.isIncomplete).toList();
     final recommendationTitle = incomplete.isNotEmpty
         ? incomplete.first.testTitle
@@ -167,27 +194,31 @@ class _HomeParentScreenState extends State<HomeParentScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
-              if (_children.isNotEmpty)
-                SizedBox(
-                  height: 84,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                    itemCount: _children.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 8),
-                    itemBuilder: (context, i) {
-                      final child = _children[i];
-                      return _ChildProgressCard(
-                        name: 'Прогресс ${child.name}',
-                        percent: child.percent,
-                        points: child.points,
-                        total: child.total,
-                        avatarIndex: child.avatarIndex,
-                        onView: () => context.go('${AppRoutes.root}?tab=2'),
-                      );
-                    },
-                  ),
-                ),
+              SizedBox(
+                height: 84,
+                child: _children.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                        child: _EmptyProgressCard(onAdd: _openAccountLinking),
+                      )
+                    : ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                        itemCount: _children.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                        itemBuilder: (context, i) {
+                          final child = _children[i];
+                          return _ChildProgressCard(
+                            name: 'Прогресс ${child.name}',
+                            percent: child.percent,
+                            points: child.points,
+                            total: child.total,
+                            avatarIndex: child.avatarIndex,
+                            onView: () => context.go('${AppRoutes.root}?tab=2'),
+                          );
+                        },
+                      ),
+              ),
               const SizedBox(height: AppSpacing.lg),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
@@ -196,19 +227,33 @@ class _HomeParentScreenState extends State<HomeParentScreen> {
                   children: [
                     const Text('Новые тесты', style: AppTextStyles.sectionTitle),
                     const SizedBox(height: 12),
-                    if (newTests.isEmpty)
+                    if (_children.isEmpty)
+                      Text(
+                        'Сначала свяжите аккаунт с ребёнком — тогда здесь появятся подходящие тесты.',
+                        style: AppTextStyles.caption,
+                      )
+                    else if (_tests.isEmpty)
                       const Text('Пока нет тестов', style: AppTextStyles.caption)
                     else
-                      for (final test in newTests) ...[
-                        _NewTestCard(
-                          title: test.title,
-                          description: test.description ??
-                              'Количество вопросов: ${test.questionCount}',
-                          onSend: () => _openSendSheet(test),
-                        ),
-                        const SizedBox(height: 12),
+                      for (final ageGroup in groupTestsByAudienceAndTopic(_tests)) ...[
+                        Text(ageGroup.label, style: AppTextStyles.cardTitle),
+                        const SizedBox(height: 10),
+                        for (final topic in ageGroup.topics) ...[
+                          Text(topic.title, style: AppTextStyles.bodySecondary),
+                          const SizedBox(height: 8),
+                          for (final test in topic.tests) ...[
+                            _NewTestCard(
+                              title: test.title,
+                              description: test.description ??
+                                  'Количество вопросов: ${test.questionCount}',
+                              onView: () => _openViewSheet(test),
+                              onSend: () => _openSendSheet(test),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                        ],
+                        const SizedBox(height: 8),
                       ],
-                    const SizedBox(height: 12),
                     const Text('Ваши рекомендации', style: AppTextStyles.sectionTitle),
                     const SizedBox(height: 12),
                     _RecommendationCard(
@@ -239,6 +284,37 @@ class _HomeParentScreenState extends State<HomeParentScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _EmptyProgressCard extends StatelessWidget {
+  const _EmptyProgressCard({required this.onAdd});
+
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onAdd,
+      child: Container(
+        width: double.infinity,
+        height: 84,
+        decoration: BoxDecoration(
+          gradient: AppColors.progressCardGradient,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.center,
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.9),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.add, size: 28, color: AppColors.textHeading),
+        ),
+      ),
     );
   }
 }
@@ -342,61 +418,67 @@ class _NewTestCard extends StatelessWidget {
   const _NewTestCard({
     required this.title,
     required this.description,
+    required this.onView,
     required this.onSend,
   });
 
   final String title;
   final String description;
+  final VoidCallback onView;
   final VoidCallback onSend;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onView,
         borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppTextStyles.cardTitle),
-                const SizedBox(height: 8),
-                Text(
-                  description,
-                  style: const TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 12,
-                    height: 16 / 12,
-                    color: AppColors.textSecondary,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTextStyles.cardTitle),
+                    const SizedBox(height: 8),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 12,
+                        height: 16 / 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: onSend,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.textHeading,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'Отправить',
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 12,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          GestureDetector(
-            onTap: onSend,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.textHeading,
-                borderRadius: BorderRadius.circular(6),
               ),
-              child: const Text(
-                'Отправить',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 12,
-                  color: Colors.white,
-                ),
-              ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

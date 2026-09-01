@@ -21,17 +21,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy over SSH
+      - name: Copy code to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          source: "backend,admin,deploy"
+          target: "/opt/antismoke"
+          overwrite: true
+
+      - name: Build and restart on server
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           command_timeout: 30m
           script: |
             set -euo pipefail
-            ROOT="${{ secrets.DEPLOY_PATH || '/opt/antismoke' }}"
-            cd "$ROOT"
-            git fetch origin main
-            git reset --hard origin/main
+            cd /opt/antismoke
             bash deploy/deploy-prod.sh

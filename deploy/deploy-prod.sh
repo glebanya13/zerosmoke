@@ -16,8 +16,7 @@ echo "==> Pull latest code"
 if [[ -d .git ]]; then
   git pull --ff-only origin main || git pull --ff-only origin master
 else
-  echo "No git repo at $ROOT — sync code manually before running this script." >&2
-  exit 1
+  echo "No git repo — assuming code was synced by CI (SCP)."
 fi
 
 echo "==> Sync admin overlay (if present)"
@@ -29,6 +28,7 @@ if [[ -f "$ROOT/deploy/admin-overlay/app/globals.css" ]]; then
 fi
 
 echo "==> Rebuild and restart stack"
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" run --rm migrate
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build backend admin
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d backend admin
 

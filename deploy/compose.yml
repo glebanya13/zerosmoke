@@ -45,6 +45,7 @@ services:
       UNISENDER_FROM_EMAIL: ${UNISENDER_FROM_EMAIL:-}
       UNISENDER_FROM_NAME: ${UNISENDER_FROM_NAME:-ZeroSmoke}
       UNISENDER_API_URL: ${UNISENDER_API_URL:-https://goapi.unisender.ru/ru/transactional/api/v1/email/send.json}
+      TEST_OTP_CODE: ${TEST_OTP_CODE:-}
     command: ["npx", "prisma", "migrate", "deploy"]
     depends_on:
       postgres:
@@ -99,7 +100,7 @@ services:
 
   site:
     build:
-      context: ../../antismoke-site
+      context: ../../zerosmoke-site
     container_name: zerosmoke-site
     restart: unless-stopped
     environment:
@@ -122,6 +123,7 @@ services:
       - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-admin.pass:/etc/caddy/admin.pass:ro
       - caddy-data:/data
       - caddy-config:/config
     depends_on:

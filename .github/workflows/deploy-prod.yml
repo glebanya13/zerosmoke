@@ -20,8 +20,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: true
 
       - name: Copy code to server
         uses: appleboy/scp-action@v0.1.7
@@ -29,7 +27,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "backend,admin,deploy"
+          source: "backend,deploy"
           target: "/opt/antismoke"
           overwrite: true
 

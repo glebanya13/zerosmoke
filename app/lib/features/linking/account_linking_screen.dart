@@ -30,6 +30,7 @@ class _AccountLinkingScreenState extends State<AccountLinkingScreen> {
   InviteCodeResult? _inviteCode;
   String? _loadError;
   String? _redeemError;
+  String _enteredCode = '';
 
   @override
   void initState() {
@@ -257,10 +258,18 @@ class _AccountLinkingScreenState extends State<AccountLinkingScreen> {
               shadow: false,
               child: Column(
                 children: [
-                  const Text('Твой код:', style: AppTextStyles.bodySecondary),
+                  Text(
+                    isParent ? 'Ваш код:' : 'Твой код:',
+                    style: AppTextStyles.bodySecondary,
+                  ),
                   Text(
                     _inviteCode!.inviteCode,
-                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: 4),
+                    style: const TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 4,
+                      color: AppColors.textHeading,
+                    ),
                   ),
                   TextButton.icon(
                     onPressed: () {
@@ -326,7 +335,11 @@ class _AccountLinkingScreenState extends State<AccountLinkingScreen> {
                   boxSize: 40,
                   radius: 12,
                   gap: 12,
-                  onCompleted: _isBusy ? null : _redeem,
+                  submitOnComplete: false,
+                  onChanged: (code) => setState(() {
+                    _enteredCode = code;
+                    _redeemError = null;
+                  }),
                 ),
                 if (_redeemError != null) ...[
                   const SizedBox(height: AppSpacing.sm),
@@ -337,6 +350,15 @@ class _AccountLinkingScreenState extends State<AccountLinkingScreen> {
                   ),
                 ],
                 const SizedBox(height: 12),
+                AppButton(
+                  label: 'Подключиться',
+                  expand: true,
+                  enabled: _enteredCode.length == 6 && !_isBusy,
+                  onPressed: _enteredCode.length == 6 && !_isBusy
+                      ? () => _redeem(_enteredCode)
+                      : null,
+                ),
+                const SizedBox(height: 4),
               ],
             ),
           ),

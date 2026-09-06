@@ -283,11 +283,27 @@ class _TestFlowScreenState extends State<TestFlowScreen> {
                                         color: AppColors.textPrimary,
                                       ),
                                     )
+                                  : !paid
+                                  ? Text(
+                                      _question.material?.isNotEmpty == true
+                                          ? _question.material!
+                                          : _question.text,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontFamily: AppTextStyles.fontFamily,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w400,
+                                        height: 22 / 16,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    )
                                   : Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Text(
-                                      isCorrect ? 'Отлично!\nЭто правильный ответ.' : 'Ой, неправильно..',
+                                      isCorrect
+                                          ? 'Отлично!\nЭто правильный ответ.\nДавай продолжим!'
+                                          : 'Ой, неправильно..\nПопробуй еще раз - у тебя всё получится!',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontFamily: AppTextStyles.fontFamily,
@@ -302,7 +318,7 @@ class _TestFlowScreenState extends State<TestFlowScreen> {
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
                                         Text(
-                                          isCorrect ? '+1' : '0',
+                                          isCorrect ? '+1' : '-1',
                                           style: TextStyle(
                                             fontFamily: AppTextStyles.fontFamily,
                                             fontSize: 28,
@@ -370,6 +386,7 @@ class _TestFlowScreenState extends State<TestFlowScreen> {
                             selected: _selected == i,
                             revealed: _revealed,
                             correctIndex: _correctOption,
+                            paid: paid,
                             onTap: () => _selectOption(i),
                           ),
                         ),
@@ -432,6 +449,7 @@ class _OptionTile extends StatelessWidget {
     required this.selected,
     required this.revealed,
     required this.correctIndex,
+    required this.paid,
     required this.onTap,
   });
 
@@ -440,6 +458,7 @@ class _OptionTile extends StatelessWidget {
   final bool selected;
   final bool revealed;
   final int? correctIndex;
+  final bool paid;
   final VoidCallback onTap;
 
   @override
@@ -448,17 +467,23 @@ class _OptionTile extends StatelessWidget {
     Color borderColor = AppColors.borderLight;
     Color textColor = AppColors.textGrey;
     if (revealed) {
-      if (correctIndex != null && index == correctIndex) {
+      if (paid && correctIndex != null && index == correctIndex) {
         bg = AppColors.successLight;
         borderColor = AppColors.success;
+        textColor = AppColors.textPrimary;
+      } else if (paid && selected && correctIndex != null && index != correctIndex) {
+        bg = const Color(0xFFFFEBEE);
+        borderColor = AppColors.dangerLight;
         textColor = AppColors.textPrimary;
       } else if (selected) {
         bg = AppColors.selectedAnswerFill;
         borderColor = AppColors.textHeading;
+        textColor = AppColors.textHeading;
       }
     } else if (selected) {
       bg = AppColors.selectedAnswerFill;
       borderColor = AppColors.textHeading;
+      textColor = AppColors.textHeading;
     }
 
     return GestureDetector(

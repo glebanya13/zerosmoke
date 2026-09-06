@@ -119,6 +119,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ]),
                         const SizedBox(height: 10),
                         _group('Уведомления', [
+                          ('Звуковое оповещение', 'soundEnabled', _settings!.soundEnabled, null),
+                          ('Вибрация', 'vibrationEnabled', _settings!.vibrationEnabled, null),
                           ('Новые тесты', 'notifyTests', _settings!.notifyTests, null),
                           (
                             'Место в рейтинге',

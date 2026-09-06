@@ -14,6 +14,8 @@ import '../../data/models/content_models.dart';
 import '../../data/models/rating_models.dart';
 import '../../data/repositories/content_repository.dart';
 import '../../data/repositories/rating_repository.dart';
+import '../quit/quit_progress_card.dart';
+import 'home_path_tutorial.dart';
 
 /// Главная (ребёнок/взрослый): карта-тропинка.
 /// Небо и CTA зафиксированы.
@@ -82,12 +84,20 @@ class _HomeChildScreenState extends State<HomeChildScreen> {
   RatingMe? _me;
   List<ContentTest> _tests = [];
   int _seenEpoch = -1;
+  bool _showTutorial = false;
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _load();
+    _maybeShowTutorial();
+  }
+
+  Future<void> _maybeShowTutorial() async {
+    if (await HomePathTutorial.shouldShow()) {
+      if (mounted) setState(() => _showTutorial = true);
+    }
   }
 
   @override
@@ -189,7 +199,18 @@ class _HomeChildScreenState extends State<HomeChildScreen> {
       );
     }
 
-    return LayoutBuilder(
+    final isAdult = context.watch<AppState>().isAdult;
+    final topSafe = MediaQuery.of(context).padding.top;
+
+    return Stack(
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(height: topSafe),
+            if (isAdult) const QuitProgressCard(),
+            Expanded(
+              child: LayoutBuilder(
       builder: (context, constraints) {
         final isTablet = constraints.maxWidth >= 600;
         // На планшете ограничиваем ширину карты, чтобы узлы не были огромными.
@@ -219,11 +240,11 @@ class _HomeChildScreenState extends State<HomeChildScreen> {
             : 0;
 
         final mentorBottom = MediaQuery.of(context).padding.bottom + 110;
-        final topSafe = MediaQuery.of(context).padding.top;
-        final statsScale = isTablet ? 1.3 : 1.0;
-        final statsTop = topSafe + 8;
+        final statsTop = 8.0;
         final dpr = MediaQuery.of(context).devicePixelRatio;
         final pathCacheWidth = (constraints.maxWidth * dpr).round();
+
+        final statsScale = isTablet ? 1.3 : 1.0;
 
         return Stack(
           children: [
@@ -352,6 +373,17 @@ class _HomeChildScreenState extends State<HomeChildScreen> {
           ],
         );
       },
+    ),
+            ),
+          ],
+        ),
+        if (_showTutorial)
+          Positioned.fill(
+            child: HomePathTutorial(
+              onFinished: () => setState(() => _showTutorial = false),
+            ),
+          ),
+      ],
     );
   }
 

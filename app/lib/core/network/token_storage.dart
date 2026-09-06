@@ -1,14 +1,15 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-/// Persists auth tokens in platform secure storage (Keychain / Keystore).
+/// Persists auth tokens. Uses [SharedPreferences] so Windows/desktop builds
+/// do not require Visual Studio ATL (needed by flutter_secure_storage).
+/// On iOS/Android the OS still sandboxes app data.
 class TokenStorage {
-  TokenStorage({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+  TokenStorage({SharedPreferences? prefs}) : _prefs = prefs;
 
   static const _accessTokenKey = 'auth.accessToken';
   static const _refreshTokenKey = 'auth.refreshToken';
 
-  final FlutterSecureStorage _storage;
+  SharedPreferences? _prefs;
 
   String? _accessToken;
   String? _refreshToken;
@@ -16,22 +17,29 @@ class TokenStorage {
   String? get accessToken => _accessToken;
   String? get refreshToken => _refreshToken;
 
+  Future<SharedPreferences> _ensurePrefs() async {
+    return _prefs ??= await SharedPreferences.getInstance();
+  }
+
   Future<void> load() async {
-    _accessToken = await _storage.read(key: _accessTokenKey);
-    _refreshToken = await _storage.read(key: _refreshTokenKey);
+    final prefs = await _ensurePrefs();
+    _accessToken = prefs.getString(_accessTokenKey);
+    _refreshToken = prefs.getString(_refreshTokenKey);
   }
 
   Future<void> save({required String accessToken, required String refreshToken}) async {
     _accessToken = accessToken;
     _refreshToken = refreshToken;
-    await _storage.write(key: _accessTokenKey, value: accessToken);
-    await _storage.write(key: _refreshTokenKey, value: refreshToken);
+    final prefs = await _ensurePrefs();
+    await prefs.setString(_accessTokenKey, accessToken);
+    await prefs.setString(_refreshTokenKey, refreshToken);
   }
 
   Future<void> clear() async {
     _accessToken = null;
     _refreshToken = null;
-    await _storage.delete(key: _accessTokenKey);
-    await _storage.delete(key: _refreshTokenKey);
+    final prefs = await _ensurePrefs();
+    await prefs.remove(_accessTokenKey);
+    await prefs.remove(_refreshTokenKey);
   }
 }

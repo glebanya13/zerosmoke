@@ -84,7 +84,7 @@ class TopStatsBar extends StatelessWidget {
                         '$points/$pointsTotal',
                         style: AppTextStyles.points.copyWith(
                           height: 1.1,
-                          fontSize: 14 * scale,
+                          fontSize: 20 * scale,
                         ),
                       ),
                       SizedBox(height: 2 * scale),

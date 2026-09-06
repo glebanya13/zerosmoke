@@ -198,14 +198,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 16),
                 const Divider(height: 1, color: AppColors.divider),
                 const SizedBox(height: 20),
-                Center(
+                Align(
+                  alignment: Alignment.centerLeft,
                   child: GestureDetector(
                     onTap: _logout,
                     child: const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
                       child: Text(
                         'Выйти из аккаунта',
-                        textAlign: TextAlign.center,
                         style: TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
                           fontSize: 16,

@@ -208,7 +208,9 @@ class _TestsListScreenState extends State<TestsListScreen>
         if (availableTopics.isEmpty)
           const Padding(
             padding: EdgeInsets.only(top: 16),
-            child: Text('Пока нет новых тестов', style: AppTextStyles.caption),
+            child: Center(
+              child: Text('Пока нет новых тестов', style: AppTextStyles.caption),
+            ),
           )
         else
           for (final topic in availableTopics) ...[

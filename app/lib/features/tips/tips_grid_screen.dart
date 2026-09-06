@@ -57,8 +57,15 @@ class _TipsGridScreenState extends State<TipsGridScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
           ? Center(child: Text(_error!, style: const TextStyle(color: Colors.white)))
-          : GridView.builder(
-              padding: EdgeInsets.fromLTRB(AppSpacing.md, topPad + 60, AppSpacing.md, 130),
+          : Column(
+              children: [
+                SizedBox(
+                  height: topPad + 52,
+                  child: const Center(child: Text('Советы', style: AppTextStyles.pageTitle)),
+                ),
+                Expanded(
+                  child: GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, 130),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 crossAxisSpacing: 8,
@@ -109,6 +116,9 @@ class _TipsGridScreenState extends State<TipsGridScreen> {
                   ),
                 );
               },
+            ),
+                ),
+              ],
             ),
     );
   }

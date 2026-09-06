@@ -112,6 +112,12 @@ class _HomeParentScreenState extends State<HomeParentScreen> {
     });
   }
 
+  static String _riskLabel(int percent) {
+    if (percent >= 70) return 'Слабый';
+    if (percent >= 40) return 'Средний';
+    return 'Высокий';
+  }
+
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
@@ -145,10 +151,9 @@ class _HomeParentScreenState extends State<HomeParentScreen> {
 
     return Stack(
       children: [
-        Positioned.fill(
-          child: Image.asset(
-            'assets/images/illustrations/sky_clouds_background.png',
-            fit: BoxFit.cover,
+        const Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(gradient: AppColors.parentHomeGradient),
           ),
         ),
         SingleChildScrollView(
@@ -214,6 +219,8 @@ class _HomeParentScreenState extends State<HomeParentScreen> {
                             points: child.points,
                             total: child.total,
                             avatarIndex: child.avatarIndex,
+                            todayTopic: 'Битва за кислород',
+                            riskLabel: _riskLabel(child.percent),
                             onView: () => context.go('${AppRoutes.root}?tab=2'),
                           );
                         },
@@ -326,6 +333,8 @@ class _ChildProgressCard extends StatelessWidget {
     required this.points,
     required this.total,
     required this.avatarIndex,
+    required this.todayTopic,
+    required this.riskLabel,
     required this.onView,
   });
 
@@ -334,6 +343,8 @@ class _ChildProgressCard extends StatelessWidget {
   final int points;
   final int total;
   final int avatarIndex;
+  final String todayTopic;
+  final String riskLabel;
   final VoidCallback onView;
 
   @override
@@ -373,21 +384,29 @@ class _ChildProgressCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
+                Text(
+                  'Сегодня: \'$todayTopic\'',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w400,
+                    height: 16 / 12,
+                  ),
+                ),
+                Text(
+                  'Уровень риска: $riskLabel',
+                  style: AppTextStyles.caption.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    height: 16 / 12,
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Expanded(
-                      child: Text(
-                        '$percent% пройдено',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.caption.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          height: 16 / 12,
-                        ),
-                      ),
-                    ),
+                    const Spacer(),
                     GestureDetector(
                       onTap: onView,
                       child: Row(

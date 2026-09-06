@@ -5,6 +5,7 @@ import '../../core/design_system/app_dimens.dart';
 import '../../core/design_system/app_text_styles.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/widgets/app_button.dart';
+import '../../core/widgets/app_text_field.dart';
 import '../../data/models/quit_models.dart';
 import '../../data/repositories/quit_repository.dart';
 
@@ -23,7 +24,7 @@ class _QuitProgressCardState extends State<QuitProgressCard> {
   QuitProfile? _profile;
 
   final _cigarettesController = TextEditingController(text: '10');
-  final _packPriceController = TextEditingController(text: '250');
+  final _packPriceController = TextEditingController(text: '200');
 
   @override
   void dispose() {
@@ -160,36 +161,56 @@ class _QuitProgressCardState extends State<QuitProgressCard> {
     final profile = _profile!;
     if (profile.quitDate == null) {
       return Container(
-        margin: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+        margin: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x14000000),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Отказ от курения', style: AppTextStyles.sectionTitle),
-            const SizedBox(height: 8),
             const Text(
+              'Отказ от курения',
+              style: TextStyle(
+                fontFamily: AppTextStyles.fontFamily,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
               'Укажите привычки, чтобы мы могли считать прогресс и сэкономленные деньги.',
-              style: AppTextStyles.bodySecondary,
+              style: AppTextStyles.bodySecondary.copyWith(
+                fontSize: 14,
+                color: AppColors.textGrey,
+                height: 1.35,
+              ),
             ),
             const SizedBox(height: 12),
-            TextField(
+            AppTextField(
               controller: _cigarettesController,
+              hintText: 'Сигарет в день',
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Сигарет в день'),
             ),
             const SizedBox(height: 8),
-            TextField(
+            AppTextField(
               controller: _packPriceController,
+              hintText: 'Цена пачки, ₽',
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Цена пачки, ₽'),
             ),
             const SizedBox(height: 12),
             AppButton(
               label: _saving ? 'Сохранение...' : 'Начать отказ с сегодня',
+              expand: true,
               onPressed: _saving ? null : _startQuit,
             ),
           ],

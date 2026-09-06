@@ -24,6 +24,7 @@ import '../../features/subscription/subscription_screen.dart';
 import '../../features/subscription/promo_onboarding_screen.dart';
 import '../../features/linking/account_linking_screen.dart';
 import '../../features/referrals/invite_friend_screen.dart';
+import '../../features/rating/how_to_earn_screen.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -47,6 +48,7 @@ class AppRoutes {
   static const promoOnboarding = '/promo-onboarding';
   static const accountLinking = '/account-linking';
   static const inviteFriend = '/invite-friend';
+  static const howToEarn = '/how-to-earn';
 }
 
 const _publicRoutes = {
@@ -150,6 +152,7 @@ GoRouter createAppRouter(AppState appState) {
       GoRoute(path: AppRoutes.promoOnboarding, builder: (c, s) => const PromoOnboardingScreen()),
       GoRoute(path: AppRoutes.accountLinking, builder: (c, s) => const AccountLinkingScreen()),
       GoRoute(path: AppRoutes.inviteFriend, builder: (c, s) => const InviteFriendScreen()),
+      GoRoute(path: AppRoutes.howToEarn, builder: (c, s) => const HowToEarnScreen()),
     ],
   );
 }

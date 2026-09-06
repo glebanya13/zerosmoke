@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/design_system/app_colors.dart';
 import '../../core/design_system/app_dimens.dart';
 import '../../core/design_system/app_text_styles.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/app_button.dart';
-import '../../core/widgets/app_card.dart';
 import '../../core/widgets/back_icon_button.dart';
 import '../../core/widgets/step_dots.dart';
 
+/// «О приложении» 1/2 — по макету: синий заголовок, белая карточка
+/// с синей рамкой r=20, дробь страницы внутри карточки.
 class WelcomeOnboardingScreen extends StatefulWidget {
   const WelcomeOnboardingScreen({super.key});
 
@@ -27,6 +29,7 @@ class _WelcomeOnboardingScreenState extends State<WelcomeOnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
@@ -41,7 +44,11 @@ class _WelcomeOnboardingScreenState extends State<WelcomeOnboardingScreen> {
                     alignment: Alignment.centerLeft,
                     child: BackIconButton(onPressed: () => Navigator.of(context).maybePop()),
                   ),
-                  StepDots(total: 6, activeStep: _page + 3),
+                  StepDots(
+                    total: 6,
+                    activeStep: _page + 3,
+                    currentCompleted: true,
+                  ),
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
@@ -50,7 +57,7 @@ class _WelcomeOnboardingScreenState extends State<WelcomeOnboardingScreen> {
                 child: Text(
                   'О приложении',
                   textAlign: TextAlign.center,
-                  style: AppTextStyles.screenTitle,
+                  style: AppTextStyles.headerTitle,
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -59,24 +66,42 @@ class _WelcomeOnboardingScreenState extends State<WelcomeOnboardingScreen> {
                   controller: _controller,
                   itemCount: _pages.length,
                   onPageChanged: (i) => setState(() => _page = i),
-                  itemBuilder: (context, i) => AppCard(
-                    child: Center(
-                      child: Text(
-                        _pages[i],
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.body.copyWith(fontSize: 18, height: 1.4),
-                      ),
+                  itemBuilder: (context, i) => Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.textHeading),
+                    ),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: Center(
+                            child: Text(
+                              _pages[i],
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.body.copyWith(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w400,
+                                height: 22 / 16,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${i + 1}/${_pages.length}',
+                          style: AppTextStyles.link.copyWith(fontSize: 16),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
-              Center(
-                child: Text('${_page + 1}/${_pages.length}', style: AppTextStyles.link),
-              ),
-              const SizedBox(height: AppSpacing.md),
               AppButton(
-                label: _page == _pages.length - 1 ? 'Начать' : 'Далее',
+                label: 'Далее',
                 onPressed: () {
                   if (_page == _pages.length - 1) {
                     context.push(AppRoutes.promoOnboarding);

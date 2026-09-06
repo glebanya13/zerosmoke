@@ -8,14 +8,17 @@ class CodeInputBoxes extends StatefulWidget {
     super.key,
     this.length = 4,
     this.onCompleted,
+    this.onChanged,
     this.boxSize = 60,
     this.radius = 20,
     this.gap = 10,
     this.alwaysActiveBorder = false,
+    this.submitOnComplete = true,
   });
 
   final int length;
   final ValueChanged<String>? onCompleted;
+  final ValueChanged<String>? onChanged;
   final double boxSize;
   final double radius;
   final double gap;
@@ -23,6 +26,10 @@ class CodeInputBoxes extends StatefulWidget {
   /// When true, every box shows the filled (blue) border from the start
   /// instead of only once it has a character in it.
   final bool alwaysActiveBorder;
+
+  /// When false, [onCompleted] is not called automatically — use a separate
+  /// submit button (account linking in Figma).
+  final bool submitOnComplete;
 
   @override
   State<CodeInputBoxes> createState() => _CodeInputBoxesState();
@@ -55,7 +62,8 @@ class _CodeInputBoxesState extends State<CodeInputBoxes> {
       _nodes[index + 1].requestFocus();
     }
     final code = _controllers.map((c) => c.text).join();
-    if (code.length == widget.length) {
+    widget.onChanged?.call(code);
+    if (widget.submitOnComplete && code.length == widget.length) {
       widget.onCompleted?.call(code);
     }
     setState(() {});

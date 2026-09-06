@@ -146,7 +146,7 @@ class _RegisterCodeScreenState extends State<RegisterCodeScreen> {
                 style: const TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
                   fontWeight: FontWeight.w600,
-                  fontSize: 20,
+                  fontSize: 24,
                   color: AppColors.textPrimary,
                 ),
               ),

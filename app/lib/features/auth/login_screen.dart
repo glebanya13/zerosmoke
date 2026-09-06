@@ -65,10 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: AppSpacing.xxl),
-              Text(
-                'Привет',
-                style: AppTextStyles.screenTitle.copyWith(fontWeight: FontWeight.w700),
-              ),
+              const Text('Привет', style: AppTextStyles.screenTitle),
               const SizedBox(height: 140),
               const Align(
                 alignment: Alignment.center,

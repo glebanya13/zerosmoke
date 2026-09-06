@@ -78,7 +78,12 @@ class _RatingScreenState extends State<RatingScreen> {
                 130,
               ),
               children: [
-                if (isParent)
+                if (isParent) ...[
+                  const SizedBox(
+                    height: 32,
+                    child: Center(child: Text('Рейтинг', style: AppTextStyles.pageTitle)),
+                  ),
+                  const SizedBox(height: 12),
                   Column(
                     children: [
                       for (final child in _leaderboard)
@@ -97,23 +102,31 @@ class _RatingScreenState extends State<RatingScreen> {
                           ),
                         ),
                     ],
-                  )
-                else ...[
+                  ),
+                ] else ...[
                   _ChildRatingHeader(
                     me: _me!,
                     onTrophyTap: () => context.push(AppRoutes.rewards),
                   ),
                   const SizedBox(height: 20),
-                  const Center(
-                    child: Text(
-                      'Лига здоровья',
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'Лига здоровья',
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
+                      IconButton(
+                        onPressed: () => context.push(AppRoutes.howToEarn),
+                        icon: const Icon(Icons.help_outline, color: Colors.white, size: 22),
+                        tooltip: 'Как заработать',
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
                   for (final entry in _leaderboard)

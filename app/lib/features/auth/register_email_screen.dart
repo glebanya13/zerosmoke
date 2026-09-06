@@ -70,7 +70,7 @@ class _RegisterEmailScreenState extends State<RegisterEmailScreen> {
                 style: TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
                   fontWeight: FontWeight.w600,
-                  fontSize: 20,
+                  fontSize: 24,
                   color: AppColors.textPrimary,
                 ),
               ),

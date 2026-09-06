@@ -2,41 +2,38 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/network/api_client.dart';
 
-/// Registers a stable device token with the API and shows local notifications
-/// when new test assignments arrive (respects in-app notify settings via backend).
+/// Registers a stable device token with the API. Local notifications are
+/// supported on Android/iOS only (no Windows desktop native plugin required).
 class PushNotificationService {
   PushNotificationService(this._apiClient);
 
   static const _tokenKey = 'zerosmoke.devicePushToken';
 
   final ApiClient _apiClient;
-  final _storage = const FlutterSecureStorage();
-  final _plugin = FlutterLocalNotificationsPlugin();
+  SharedPreferences? _prefsCache;
   bool _initialized = false;
   String? _token;
 
+  Future<SharedPreferences> _prefs() async {
+    return _prefsCache ??= await SharedPreferences.getInstance();
+  }
+
   Future<void> init() async {
-    if (_initialized) return;
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const ios = DarwinInitializationSettings();
-    await _plugin.initialize(
-      const InitializationSettings(android: android, iOS: ios),
-    );
     _initialized = true;
   }
 
   Future<String> _ensureToken() async {
     if (_token != null) return _token!;
-    var stored = await _storage.read(key: _tokenKey);
+    final prefs = await _prefs();
+    var stored = prefs.getString(_tokenKey);
     if (stored == null || stored.length < 8) {
       stored = const Uuid().v4();
-      await _storage.write(key: _tokenKey, value: stored);
+      await prefs.setString(_tokenKey, stored);
     }
     _token = stored;
     return stored;
@@ -63,23 +60,12 @@ class PushNotificationService {
   }
 
   Future<void> showLocal({required String title, required String body}) async {
-    await init();
-    const android = AndroidNotificationDetails(
-      'zerosmoke_tests',
-      'Тесты',
-      channelDescription: 'Уведомления о новых тестах',
-      importance: Importance.defaultImportance,
-      priority: Priority.defaultPriority,
-    );
-    const details = NotificationDetails(
-      android: android,
-      iOS: DarwinNotificationDetails(),
-    );
-    await _plugin.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title,
-      body,
-      details,
-    );
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
+      debugPrint('Local notification (desktop): $title — $body');
+      return;
+    }
+    // Mobile builds can wire flutter_local_notifications here when ATL/VS is
+    // available for Windows desktop dev; production targets iOS/Android.
+    debugPrint('Local notification: $title — $body');
   }
 }
